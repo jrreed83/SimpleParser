@@ -21,7 +21,7 @@ module SimpleParser where
              \s -> case run parser1 s of 
                         Failure x      -> Failure x 
                         Success m1 r1  -> case run parser2 r1 of
-                                               Failure x           -> Failure x 
+                                               Failure x      -> Failure x 
                                                Success m2 r2  -> Success (m1++m2) r2   
 
     (.>>.) :: Parser -> Parser -> Parser 
