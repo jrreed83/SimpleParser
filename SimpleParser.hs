@@ -6,26 +6,30 @@ module SimpleParser where
 
     data Parser a = Parser {run :: String -> Result a}
 
---    pChar :: Char -> Parser Char
---    pChar c =
---        Parser $
---             \s -> 
---                if (head s) == c then 
---                    Success c 1  
---                else 
---                    Failure ("Expected " ++ [c] ++ " but got " ++ [head s])          
+    instance Functor Parser where
+        fmap f pa = 
+            Parser $ 
+                \s -> case run pa s of 
+                           Failure _ -> Failure "Error" 
+                           Success x c -> Success (f x) c        
              
     pChar :: Char -> Parser Char
-    pChar x = Parser fn 
-              where fn (h:t) | (h == x)  = Success x 1 
-                             | otherwise = Failure ("Expected " ++ [x] ++ " but got " ++ [h])  
+    pChar x = Parser $  
+                   \(h:t) -> if (h == x) then 
+                                Success x 1 
+                             else 
+                                Failure ("Expected " ++ [x] ++ " but got " ++ [h])  
+
+    unit :: a -> Parser a 
+    unit x = Parser fn 
+             where fn s = Success x 1 
 
     pString :: String -> Parser String
     pString x = Parser fn 
                 where n  = length x
                       fn s | (x == (take n s)) = Success x n
                            | otherwise         = Failure "Error"
-                                   
+
     pDigit :: Int -> Parser Int
     pDigit x = Parser fn
                where fn (h:t) | (h == ((head . show) x)) = Success x 1 
