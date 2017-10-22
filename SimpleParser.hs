@@ -31,10 +31,10 @@ module SimpleParser where
     alt parser1 parser2 = 
         Parser $
              \s -> case run parser1 s of
-                        Success m c -> Success m (c + 1)
+                        Success m c -> Success m c
                         Failure _   -> case run parser2 s of 
                                           Failure _   -> Failure "Couldn't match anything"
-                                          Success m c -> Success m (c + 1) 
+                                          Success m c -> Success m c 
 
     (<|>) :: Parser a -> Parser a -> Parser a 
     (<|>) = alt
