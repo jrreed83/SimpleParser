@@ -20,6 +20,12 @@ module SimpleParser where
               where fn (h:t) | (h == x)  = Success x 1 
                              | otherwise = Failure ("Expected " ++ [x] ++ " but got " ++ [h])  
 
+    pString :: String -> Parser String
+    pString x = Parser fn 
+                where n  = length x
+                      fn s | (x == (take n s)) = Success x n
+                           | otherwise         = Failure "Error"
+                                   
     pDigit :: Int -> Parser Int
     pDigit x = Parser fn
                where fn (h:t) | (h == ((head . show) x)) = Success x 1 
