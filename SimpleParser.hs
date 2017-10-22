@@ -1,6 +1,6 @@
 module SimpleParser where
 
-    data Result a = Success {match :: a, rest :: String}
+    data Result a = Success {match :: a, count :: Int}
                   | Failure {msg :: String}
                   deriving (Show, Eq)
 
@@ -11,7 +11,7 @@ module SimpleParser where
         Parser $
              \s -> 
                 if (head s) == c then 
-                    Success c (tail s)  
+                    Success c 1  
                 else 
                     Failure ("Expected " ++ [c] ++ " but got " ++ [head s])          
              
@@ -20,9 +20,9 @@ module SimpleParser where
         Parser $
              \s -> case run parser1 s of 
                         Failure x      -> Failure x 
-                        Success m1 r1  -> case run parser2 r1 of
+                        Success m1 c1  -> case run parser2 (drop c1 s) of
                                                Failure x      -> Failure x 
-                                               Success m2 r2  -> Success (m1,m2) r2   
+                                               Success m2 c2  -> Success (m1,m2) (c1+c2)   
 
     (.>>.) :: Parser a -> Parser b -> Parser (a,b) 
     (.>>.) = andThen
@@ -31,10 +31,10 @@ module SimpleParser where
     alt parser1 parser2 = 
         Parser $
              \s -> case run parser1 s of
-                        Success m r -> Success m r
+                        Success m c -> Success m (c + 1)
                         Failure _   -> case run parser2 s of 
                                           Failure _   -> Failure "Couldn't match anything"
-                                          Success m r -> Success m r 
+                                          Success m c -> Success m (c + 1) 
 
     (<|>) :: Parser a -> Parser a -> Parser a 
     (<|>) = alt
