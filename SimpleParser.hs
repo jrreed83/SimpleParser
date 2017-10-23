@@ -7,11 +7,10 @@ module SimpleParser where
     data Parser a = Parser {run :: String -> Result a}
 
     instance Functor Parser where
-        fmap f pa = 
-            Parser $ 
-                \s -> case run pa s of 
-                           Failure _ -> Failure "Error" 
-                           Success x c -> Success (f x) c        
+        fmap f pa = Parser $ 
+                        \s -> case run pa s of 
+                                   Failure _   -> Failure "Error" 
+                                   Success x c -> Success (f x) c        
              
     pChar :: Char -> Parser Char
     pChar x = Parser $  
@@ -21,8 +20,7 @@ module SimpleParser where
                                 Failure ("Expected " ++ [x] ++ " but got " ++ [h])  
 
     unit :: a -> Parser a 
-    unit x = Parser fn 
-             where fn s = Success x 1 
+    unit x = Parser ( \s -> Success x 1 )
 
     pString :: String -> Parser String
     pString x = Parser fn 
@@ -37,12 +35,12 @@ module SimpleParser where
 
     andThen :: Parser a -> Parser b -> Parser (a,b)
     andThen parser1 parser2 = 
-        Parser fn 
-        where fn s = case run parser1 s of 
-                          Failure x      -> Failure x 
-                          Success m1 c1  -> case run parser2 (drop c1 s) of
-                                                 Failure x      -> Failure x 
-                                                 Success m2 c2  -> Success (m1,m2) (c1+c2)   
+        Parser $ 
+             \s -> case run parser1 s of 
+                        Failure x      -> Failure x 
+                        Success m1 c1  -> case run parser2 (drop c1 s) of
+                                               Failure x      -> Failure x 
+                                               Success m2 c2  -> Success (m1,m2) (c1+c2)   
 
     (.>>.) :: Parser a -> Parser b -> Parser (a,b) 
     (.>>.) = andThen
@@ -58,3 +56,10 @@ module SimpleParser where
 
     (<|>) :: Parser a -> Parser a -> Parser a 
     (<|>) = alt
+
+    slice :: Parser a -> Parser String 
+    slice p = 
+        Parser $
+             \s -> case run p s of
+                        Failure _   -> Failure "Error"
+                        Success _ c -> Success (take c s) c
