@@ -23,10 +23,12 @@ module SimpleParser where
     unit x = Parser ( \s -> Success x 1 )
 
     pString :: String -> Parser String
-    pString x = Parser fn 
-                where n  = length x
-                      fn s | (x == (take n s)) = Success x n
-                           | otherwise         = Failure "Error"
+    pString x = Parser $
+                     \s -> let n = length x
+                           in  if (x == (take n s)) then 
+                                    Success x n
+                               else 
+                                    Failure "Error"
 
     pDigit :: Int -> Parser Int
     pDigit x = Parser fn
