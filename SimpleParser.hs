@@ -53,8 +53,8 @@ module SimpleParser where
              \s -> case run parser1 s of
                         Success m c -> Success m c
                         Failure _   -> case run parser2 s of 
-                                          Failure _   -> Failure "Couldn't match anything"
-                                          Success m c -> Success m c 
+                                            Failure _   -> Failure "Couldn't match anything"
+                                            Success m c -> Success m c 
 
     (<|>) :: Parser a -> Parser a -> Parser a 
     (<|>) = alt
@@ -65,3 +65,12 @@ module SimpleParser where
              \s -> case run p s of
                         Failure _   -> Failure "Error"
                         Success _ c -> Success (take c s) c
+    
+    map2 :: ((a,b) -> c) -> Parser a -> Parser b -> Parser c
+    map2 f pa pb = 
+        Parser $
+             \s -> case run pa s of
+                        Failure _      -> Failure "Error"
+                        Success xa ta  -> case run pb s of 
+                                               Failure _     -> Failure "Error"
+                                               Success xb tb -> Success (f (xa,xb)) (max ta tb)  
