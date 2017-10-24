@@ -74,7 +74,7 @@ module SimpleParser where
                          Failure m   -> Failure m
                          Success x r -> let n = (length s) - (length r)
                                         in  Success (take n s) r
-                                        
+
     map2 :: ((a,b) -> c) -> Parser a -> Parser b -> Parser c
     map2 f pa pb = fmap f (pa .>>. pb)
 
@@ -91,3 +91,9 @@ module SimpleParser where
 
     (.>>) :: Parser a -> Parser b -> Parser a 
     pa .>> pb = fmap (\(a,b) -> a) (pa .>>. pb)
+
+    data Date = Date { day :: Int, month :: Int, year :: Int} 
+                deriving (Show)
+
+    date :: Parser Date
+    date = fmap (\(x,(y,z)) -> Date x y z) (integer .>>. ((char '/') >>. integer .>>. ((char '/') >>. integer)))
