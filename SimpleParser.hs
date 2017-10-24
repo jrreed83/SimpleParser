@@ -65,19 +65,9 @@ module SimpleParser where
              \s -> case run p s of
                         Failure m   -> Failure m
                         Success _ c -> Success (take c s) c
-    
+     
     map2 :: ((a,b) -> c) -> Parser a -> Parser b -> Parser c
-    map2 f pa pb = 
-        Parser $
-             \s -> case run pa s of
-                        Failure _      -> Failure "Error"
-                        Success xa ta  -> case run pb (drop ta s) of 
-                                               Failure _     -> Failure "Error"
-                                               Success xb tb -> Success (f (xa,xb)) (ta + tb)  
-
-
-    map2' :: ((a,b) -> c) -> Parser a -> Parser b -> Parser c
-    map2' f pa pb = fmap f (pa .>>. pb)
+    map2 f pa pb = fmap f (pa .>>. pb)
 
     many :: Parser a -> Parser [a]
     many pa = 
@@ -85,3 +75,9 @@ module SimpleParser where
         where fn lst cnt s = case run pa s of
                 Failure _    -> Success lst cnt
                 Success x t  -> fn (lst ++ [x]) (cnt + t) (drop t s)
+ 
+    (>>.) :: Parser a -> Parser b -> Parser b 
+    pa >>. pb = fmap (\(a,b) -> b) (pa .>>. pb)
+
+    (.>>) :: Parser a -> Parser b -> Parser a 
+    pa .>> pb = fmap (\(a,b) -> a) (pa .>>. pb)
