@@ -1,6 +1,6 @@
 module SimpleParser where
 
-    data Result a = Success {match :: a, count :: Int}
+    data Result a = Success {match :: a, rest :: String}
                   | Failure {msg :: String}
                   deriving (Show, Eq)
 
@@ -12,37 +12,45 @@ module SimpleParser where
                                    Failure m   -> Failure m 
                                    Success x c -> Success (f x) c        
              
-    pChar :: Char -> Parser Char
-    pChar x = Parser $  
+    char :: Char -> Parser Char
+    char x = Parser $  
                    \(h:t) -> if (h == x) then 
-                                Success x 1 
+                                Success x t 
                              else 
                                 Failure ("Expected " ++ [x] ++ " but got " ++ [h])  
 
     unit :: a -> Parser a 
-    unit x = Parser ( \s -> Success x 1 )
+    unit x = Parser ( \s -> Success x s )
 
-    pString :: String -> Parser String
-    pString x = Parser $
+    string :: String -> Parser String
+    string x = Parser $
                      \s -> let n = length x
                            in  if (x == (take n s)) then 
-                                    Success x n
+                                    Success x (drop n s)
                                else 
                                     Failure "Error"
 
-    pDigit :: Int -> Parser Int
-    pDigit x = Parser fn
-               where fn (h:t) | (h == ((head . show) x)) = Success x 1 
-                              | otherwise                = Failure ("Error")  
+    digit :: Int -> Parser Int
+    digit x = fmap (\c -> (read c :: Int)) (string (show x))
+
+    anyDigit :: Parser Int 
+    anyDigit = (digit 0) <|> (digit 1) <|> (digit 2) <|> (digit 3) <|> (digit 4) <|> 
+               (digit 5) <|> (digit 6) <|> (digit 7) <|> (digit 8) <|> (digit 9) 
+
+    integer :: Parser Int
+    integer = 
+        fmap (\l -> (fn l)) (many anyDigit)
+        where fn l = read (map (head . show) l) :: Int
+
 
     andThen :: Parser a -> Parser b -> Parser (a,b)
     andThen parser1 parser2 = 
         Parser $ 
              \s -> case run parser1 s of 
                         Failure x      -> Failure x 
-                        Success m1 c1  -> case run parser2 (drop c1 s) of
+                        Success m1 r1  -> case run parser2 r1 of
                                                Failure m      -> Failure m 
-                                               Success m2 c2  -> Success (m1,m2) (c1+c2)   
+                                               Success m2 r2  -> Success (m1,m2) r2   
 
     (.>>.) :: Parser a -> Parser b -> Parser (a,b) 
     (.>>.) = andThen
@@ -51,10 +59,10 @@ module SimpleParser where
     alt parser1 parser2 = 
         Parser $
              \s -> case run parser1 s of
-                        Success m c -> Success m c
+                        Success m r -> Success m r
                         Failure _   -> case run parser2 s of 
                                             Failure m   -> Failure "Couldn't match anything"
-                                            Success m c -> Success m c 
+                                            Success m r -> Success m r 
 
     (<|>) :: Parser a -> Parser a -> Parser a 
     (<|>) = alt
@@ -62,19 +70,21 @@ module SimpleParser where
     slice :: Parser a -> Parser String 
     slice p = 
         Parser $
-             \s -> case run p s of
-                        Failure m   -> Failure m
-                        Success _ c -> Success (take c s) c
-     
+             \s ->  case run p s of
+                         Failure m   -> Failure m
+                         Success x r -> let n = (length s) - (length r)
+                                        in  Success (take n s) r
+                                        
     map2 :: ((a,b) -> c) -> Parser a -> Parser b -> Parser c
     map2 f pa pb = fmap f (pa .>>. pb)
 
     many :: Parser a -> Parser [a]
     many pa = 
-        Parser (fn [] 0)
-        where fn lst cnt s = case run pa s of
-                Failure _    -> Success lst cnt
-                Success x t  -> fn (lst ++ [x]) (cnt + t) (drop t s)
+        Parser (fn [])
+        where fn accum [] = Success accum [] 
+              fn accum s = case run pa s of
+                Failure _    -> Success accum s
+                Success x r  -> fn (accum ++ [x]) r
  
     (>>.) :: Parser a -> Parser b -> Parser b 
     pa >>. pb = fmap (\(a,b) -> b) (pa .>>. pb)
