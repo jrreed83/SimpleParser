@@ -1,5 +1,6 @@
 module SimpleParser where
-
+    import Data.Time
+    import Text.Printf
     data Result a = Success {match :: a, rest :: String}
                   | Failure {msg :: String}
                   deriving (Show, Eq)
@@ -92,8 +93,16 @@ module SimpleParser where
     (.>>) :: Parser a -> Parser b -> Parser a 
     pa .>> pb = fmap (\(a,b) -> a) (pa .>>. pb)
 
-    data Date = Date { day :: Int, month :: Int, year :: Int} 
+    data Date = Date { month :: Int, day :: Int, year :: Int} 
                 deriving (Show)
+
+    translate :: Date -> UTCTime
+    translate (Date m d y) = 
+        let str = printf "%02d/%02d/%d" m d y
+        in  parseTimeOrError False defaultTimeLocale "%m/%d/%Y" str :: UTCTime
+
+    spaces :: Parser String 
+    spaces = many (char ' ')
 
     date :: Parser Date
     date = fmap (\(x,(y,z)) -> Date x y z) (integer .>>. ((char '/') >>. integer .>>. ((char '/') >>. integer)))
