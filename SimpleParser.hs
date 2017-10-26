@@ -6,7 +6,13 @@ module SimpleParser where
                   | Failure {msg :: String}
                   deriving (Show, Eq)
 
-    data Parser a = Parser {run :: String -> Result a}
+    data Parser a = Parser { run :: String -> Result a }
+
+    parse :: Parser a -> String -> Result a 
+    parse pa str = case run pa str of 
+                        Failure msg  -> Failure msg 
+                        Success x "" -> Success x ""
+                        Success x r  -> Failure "Failed to parse entire"
 
     instance Functor Parser where
         fmap f pa = Parser $ 
@@ -16,7 +22,8 @@ module SimpleParser where
 
     instance Applicative Parser where 
         pure x = success x 
-        
+
+
     instance Monad Parser where 
         pa >>= f = bind pa f 
         pa >> pb = pa >>. pb
@@ -107,12 +114,10 @@ module SimpleParser where
         Parser $
              \s -> case run pa s of
                         Failure msg1  -> Failure msg1
-                        Success x1 r1 -> case run (f x1) r1 of 
-                                            Failure msg2  -> Failure msg2 
-                                            Success x2 r2 -> Success x2 r2
+                        Success x1 r1 -> run (f x1) r1 
 
     (>>.) :: Parser a -> Parser b -> Parser b 
-    pa >>. pb = pa `bind` (\_ -> pb)
+    pa >>. pb = pa >>= (\_ -> pb)
     --pa >>. pb = fmap (\(a,b) -> b) (pa .>>. pb)
 
     (.>>) :: Parser a -> Parser b -> Parser a 
