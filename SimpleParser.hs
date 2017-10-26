@@ -87,6 +87,9 @@ module SimpleParser where
                 Failure _    -> Success accum s
                 Success x r  -> fn (accum ++ [x]) r
  
+    many1 :: Parser a -> Parser [a]
+    many1 pa = fmap (\(x,y) -> x : y) (pa .>>. (many pa))
+
     (>>.) :: Parser a -> Parser b -> Parser b 
     pa >>. pb = fmap (\(a,b) -> b) (pa .>>. pb)
 
