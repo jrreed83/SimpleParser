@@ -1,6 +1,7 @@
 module SimpleParser where
     import Data.Time
     import Text.Printf
+
     data Result a = Success {match :: a, rest :: String}
                   | Failure {msg :: String}
                   deriving (Show, Eq)
@@ -12,7 +13,15 @@ module SimpleParser where
                         \s -> case run pa s of 
                                    Failure m   -> Failure m 
                                    Success x c -> Success (f x) c        
-             
+
+    instance Applicative Parser where 
+        pure x = success x 
+        
+    instance Monad Parser where 
+        pa >>= f = bind pa f 
+        pa >> pb = pa >>. pb
+        return x = success x 
+
     char :: Char -> Parser Char
     char x = Parser $  
                    \(h:t) -> if (h == x) then 
@@ -20,8 +29,8 @@ module SimpleParser where
                              else 
                                 Failure ("Expected " ++ [x] ++ " but got " ++ [h])  
 
-    unit :: a -> Parser a 
-    unit x = Parser ( \s -> Success x s )
+    success :: a -> Parser a 
+    success x = Parser ( \s -> Success x s )
 
     string :: String -> Parser String
     string x = Parser $
@@ -90,8 +99,21 @@ module SimpleParser where
     many1 :: Parser a -> Parser [a]
     many1 pa = fmap (\(x,y) -> x : y) (pa .>>. (many pa))
 
+--    exact :: Int -> Parser a -> Parser a 
+--    exact n pa = 
+
+    bind :: Parser a -> (a -> Parser b) -> Parser b 
+    bind pa f = 
+        Parser $
+             \s -> case run pa s of
+                        Failure msg1  -> Failure msg1
+                        Success x1 r1 -> case run (f x1) r1 of 
+                                            Failure msg2  -> Failure msg2 
+                                            Success x2 r2 -> Success x2 r2
+
     (>>.) :: Parser a -> Parser b -> Parser b 
-    pa >>. pb = fmap (\(a,b) -> b) (pa .>>. pb)
+    pa >>. pb = pa `bind` (\_ -> pb)
+    --pa >>. pb = fmap (\(a,b) -> b) (pa .>>. pb)
 
     (.>>) :: Parser a -> Parser b -> Parser a 
     pa .>> pb = fmap (\(a,b) -> a) (pa .>>. pb)
