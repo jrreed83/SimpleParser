@@ -120,7 +120,10 @@ module Data.SimpleParser
                 Success x r  -> fn (accum ++ [x]) r
  
     many1 :: Parser a -> Parser [a]
-    many1 pa = fmap (\(x,y) -> x : y) (pa .>>. (many pa))
+    --many1 pa = fmap (\(x,y) -> x : y) (pa .>>. (many pa))
+    many1 pa = do { xa <- pa
+                  ; la <- many pa
+                  ; return (xa : la)}
 
     exactlyN :: Parser a -> Int -> Parser [a]
     exactlyN pa n = 
@@ -150,11 +153,17 @@ module Data.SimpleParser
     
 
     (>>.) :: Parser a -> Parser b -> Parser b 
-    pa >>. pb = pa >>= (\_ -> pb)
+    --pa >>. pb = pa >>= (\_ -> pb)
     --pa >>. pb = fmap (\(a,b) -> b) (pa .>>. pb)
+    pa >>. pb = do { xa <- pa 
+                   ; xb <- pb
+                   ; return xb }
 
     (.>>) :: Parser a -> Parser b -> Parser a 
-    pa .>> pb = fmap (\(a,b) -> a) (pa .>>. pb)
+    --pa .>> pb = fmap (\(a,b) -> a) (pa .>>. pb)
+    pa .>> pb = do { xa <- pa 
+                   ; xb <- pb
+                   ; return xa }
 
     data Date = Date { month :: Int, day :: Int, year :: Int} 
                 deriving (Show)
