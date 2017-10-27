@@ -22,6 +22,7 @@ module SimpleParser where
 
     instance Applicative Parser where 
         pure x = success x 
+        pf <*> pa = apply pf pa
 
 
     instance Monad Parser where 
@@ -114,13 +115,23 @@ module SimpleParser where
                                          else Failure "Error"
 --    exact :: Int -> Parser a -> Parser a 
 --    exact n pa = 
-
+    {-- --}
     bind :: Parser a -> (a -> Parser b) -> Parser b 
     bind pa f = 
         Parser $
              \s -> case run pa s of
                         Failure msg1  -> Failure msg1
                         Success x1 r1 -> run (f x1) r1 
+
+    apply :: Parser (a -> b) -> Parser a -> Parser b 
+    apply pf pa = 
+        Parser $
+             \s -> case run pf s of
+                        Failure msg -> Failure msg 
+                        Success f _ -> case run pa s of
+                                            Failure msg -> Failure msg 
+                                            Success x r -> Success (f x) r
+    
 
     (>>.) :: Parser a -> Parser b -> Parser b 
     pa >>. pb = pa >>= (\_ -> pb)
