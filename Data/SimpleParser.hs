@@ -143,26 +143,28 @@ module Data.SimpleParser
                         Success x1 r1 -> run (f x1) r1 
 
     apply :: Parser (a -> b) -> Parser a -> Parser b 
-    apply pf pa = 
-        Parser $
-             \s -> case run pf s of
-                        Failure msg -> Failure msg 
-                        Success f _ -> case run pa s of
-                                            Failure msg -> Failure msg 
-                                            Success x r -> Success (f x) r
+    apply pf pa = do { f  <- pf
+                     ; xa <- pa 
+                     ; return (f xa)}
+--        Parser $
+--             \s -> case run pf s of
+--                        Failure msg -> Failure msg 
+--                        Success f _ -> case run pa s of
+--                                            Failure msg -> Failure msg 
+--                                            Success x r -> Success (f x) r
     
 
     (>>.) :: Parser a -> Parser b -> Parser b 
     --pa >>. pb = pa >>= (\_ -> pb)
     --pa >>. pb = fmap (\(a,b) -> b) (pa .>>. pb)
-    pa >>. pb = do { xa <- pa 
+    pa >>. pb = do { _  <- pa 
                    ; xb <- pb
                    ; return xb }
 
     (.>>) :: Parser a -> Parser b -> Parser a 
     --pa .>> pb = fmap (\(a,b) -> a) (pa .>>. pb)
     pa .>> pb = do { xa <- pa 
-                   ; xb <- pb
+                   ; _  <- pb
                    ; return xa }
 
     data Date = Date { month :: Int, day :: Int, year :: Int} 
