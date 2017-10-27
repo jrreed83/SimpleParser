@@ -1,4 +1,21 @@
-module SimpleParser where
+module Data.SimpleParser 
+    (
+      Parser(..)
+    , Result(..)
+    , char
+    , success
+    , string
+    , digit
+    , anyDigit
+    , integer
+    , (.>>.)
+    , (<|>)
+    , (.>>)
+    , (>>.)
+    , many
+    , many1
+    , exactlyN
+    ) where
     import Data.Time
     import Text.Printf
 
@@ -153,8 +170,3 @@ module SimpleParser where
     date :: Parser Date
     date = fmap (\(x,(y,z)) -> Date x y z) (integer .>>. ((char '/') >>. integer .>>. ((char '/') >>. integer)))
 
-    bitHeader :: Parser Int
-    bitHeader = anyDigit .>> (string "'b")
-
-    bits :: Parser [Int]
-    bits = bitHeader >>= exactlyN (digit 0 <|> digit 1)
