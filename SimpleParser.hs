@@ -77,9 +77,7 @@ module SimpleParser where
         Parser $
              \s -> case run parser1 s of
                         Success m r -> Success m r
-                        Failure _   -> case run parser2 s of 
-                                            Failure m   -> Failure "Couldn't match anything"
-                                            Success m r -> Success m r 
+                        Failure _   -> run parser2 s
 
     (<|>) :: Parser a -> Parser a -> Parser a 
     (<|>) = alt
@@ -106,6 +104,14 @@ module SimpleParser where
     many1 :: Parser a -> Parser [a]
     many1 pa = fmap (\(x,y) -> x : y) (pa .>>. (many pa))
 
+    exactlyN :: Parser a -> Int -> Parser [a]
+    exactlyN pa n = 
+        Parser $ 
+             \s -> case run (many pa) s of 
+                        Failure msg   -> Failure msg 
+                        Success lst r -> if (length lst) == n 
+                                         then (Success lst r) 
+                                         else Failure "Error"
 --    exact :: Int -> Parser a -> Parser a 
 --    exact n pa = 
 
@@ -136,3 +142,9 @@ module SimpleParser where
 
     date :: Parser Date
     date = fmap (\(x,(y,z)) -> Date x y z) (integer .>>. ((char '/') >>. integer .>>. ((char '/') >>. integer)))
+
+    bitHeader :: Parser Int
+    bitHeader = anyDigit .>> (string "'b")
+
+    bits :: Parser [Int]
+    bits = bitHeader >>= exactlyN (digit 0 <|> digit 1)
