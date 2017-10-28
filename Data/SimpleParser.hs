@@ -80,12 +80,15 @@ module Data.SimpleParser
 
     andThen :: Parser a -> Parser b -> Parser (a,b)
     andThen parser1 parser2 = 
-        Parser $ 
-             \s -> case run parser1 s of 
-                        Failure x      -> Failure x 
-                        Success m1 r1  -> case run parser2 r1 of
-                                               Failure m      -> Failure m 
-                                               Success m2 r2  -> Success (m1,m2) r2   
+         do { x <- parser1
+            ; y <- parser2
+            ; return (x,y) }
+--        Parser $ 
+--             \s -> case run parser1 s of 
+--                        Failure x      -> Failure x 
+--                        Success m1 r1  -> case run parser2 r1 of
+--                                               Failure m      -> Failure m 
+--                                               Success m2 r2  -> Success (m1,m2) r2   
 
     (.>>.) :: Parser a -> Parser b -> Parser (a,b) 
     (.>>.) = andThen
@@ -109,7 +112,11 @@ module Data.SimpleParser
                                         in  Success (take n s) r
 
     map2 :: ((a,b) -> c) -> Parser a -> Parser b -> Parser c
-    map2 f pa pb = fmap f (pa .>>. pb)
+--    map2 f pa pb = fmap f (pa .>>. pb)
+    map2 f pa pb = 
+        do { x <- pa 
+           ; y <- pb 
+           ; return $ f (x, y) }
 
     many :: Parser a -> Parser [a]
     many pa = 
@@ -179,5 +186,11 @@ module Data.SimpleParser
     spaces = many (char ' ')
 
     date :: Parser Date
-    date = fmap (\(x,(y,z)) -> Date x y z) (integer .>>. ((char '/') >>. integer .>>. ((char '/') >>. integer)))
+    date = do { month <- integer 
+              ; char '/'
+              ; day <- integer
+              ; char '/' 
+              ; year <- integer
+              ; return $ Date month day year }
+    --date = fmap (\(x,(y,z)) -> Date x y z) (integer .>>. ((char '/') >>. integer .>>. ((char '/') >>. integer)))
 
