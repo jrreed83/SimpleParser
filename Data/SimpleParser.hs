@@ -15,7 +15,9 @@ module Data.SimpleParser
     , many
     , many1
     , exactlyN
+    , spaces
     ) where
+        
     import Data.Time
     import Text.Printf
 
