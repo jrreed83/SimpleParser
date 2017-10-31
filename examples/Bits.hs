@@ -1,69 +1,87 @@
 module Bits 
     (
        bitHeader
-    ,  oneBit
-    ,  zeroBit
+    ,  high
+    ,  low
     ) where 
 
 import Data.SimpleParser 
 
+data Op2 = AND 
+         | OR 
+         | XOR 
+         | PLUS
+          deriving (Show) 
 
-data Operator2 = AND 
-               | OR 
-               | XOR 
-               deriving (Show) 
+data Op1 = NEG deriving (Show)
 
-data Expression = Number [Int] 
-                | Op Operator2 Expression Expression 
+data Expression = Number [Bit]
+                | BinaryOp Op2 Expression Expression
+                | UnaryOp Op1 Expression 
                 deriving (Show)
 
-eval :: Expression -> [Int]
-eval (Op AND lhs rhs) = (eval lhs) |&| (eval rhs)
-eval (Op OR  lhs rhs) = (eval lhs) |&| (eval rhs)
-eval (Op XOR lhs rhs) = (eval lhs) |&| (eval rhs)
-eval (Number x)       = x
+data Bit = H | L deriving Show 
 
-(|&|) :: [Int] -> [Int] -> [Int]
-x |&| y = x 
+--eval :: Expression -> Int
+--eval (Op AND lhs rhs) = (eval lhs) .&. (eval rhs)
+--eval (Op OR  lhs rhs) = (eval lhs) .|.  (eval rhs)
+--eval (Op XOR lhs rhs) = (eval lhs) `xor` (eval rhs)
+--eval (Number x _)       = x
 
+--(.|.)  
 bitHeader :: Parser Int
 bitHeader = anyDigit .>> (string "'b")
 
-oneBit :: Parser Int
-oneBit = digit 0 
+high :: Parser Bit
+high = do { _ <- digit 1
+          ; return H } 
 
-zeroBit :: Parser Int
-zeroBit = digit 1 
+low :: Parser Bit
+low = do { _ <- digit 0
+         ; return L }
 
-bit :: Parser Int
-bit = oneBit <|> zeroBit
+bit :: Parser Bit
+bit = low <|> high
 
-andToken :: Parser Operator2 
+andToken :: Parser Op2 
 andToken = do { _ <- char '&'
               ; return AND}
 
-orToken :: Parser Operator2 
+orToken :: Parser Op2 
 orToken = do { _ <- char '|'
              ; return OR}
 
-xorToken :: Parser Operator2 
+xorToken :: Parser Op2 
 xorToken = do { _ <- char '^'
               ; return XOR}             
 
-token :: Parser Operator2 
-token = andToken <|> orToken <|> xorToken
+negToken :: Parser Op1 
+negToken = do { _ <- char '~'
+              ; return NEG}    
 
+token2 :: Parser Op2
+token2 = andToken <|> orToken <|> xorToken
+
+token1 :: Parser Op1
+token1 = negToken 
 
 number :: Parser Expression
---bits = bitHeader >>= exactlyN (oneBit <|> zeroBit)
 number = do { numBits <- bitHeader
-            ; list <- exactlyN bit numBits
+            ; list    <- exactlyN bit numBits
             ; return $ Number list }
  
-foo :: Parser Expression
-foo = do { x <- number 
-         ; spaces
-         ; t <- token
-         ; spaces 
-         ; y <- number
-         ; return $ Op t x y}
+binaryExpression :: Parser Expression
+binaryExpression = 
+    do { x <- number 
+       ; _ <- spaces
+       ; t <- token2
+       ; _ <- spaces 
+       ; y <- number
+       ; return $ BinaryOp t x y }
+
+unaryExpression :: Parser Expression
+unaryExpression = 
+    do { t <- token1
+       ; _ <- spaces 
+       ; x <- number
+       ; return $ UnaryOp t x }       

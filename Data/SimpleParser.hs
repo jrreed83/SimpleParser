@@ -16,6 +16,8 @@ module Data.SimpleParser
     , many1
     , exactlyN
     , spaces
+    , anyOf
+    , failure
     ) where
         
     import Data.Time
@@ -130,9 +132,9 @@ module Data.SimpleParser
  
     many1 :: Parser a -> Parser [a]
     --many1 pa = fmap (\(x,y) -> x : y) (pa .>>. (many pa))
-    many1 pa = do { xa <- pa
-                  ; la <- many pa
-                  ; return (xa : la)}
+    many1 pa = do { first <- pa
+                  ; list  <- many pa
+                  ; return (first : list)}
 
     exactlyN :: Parser a -> Int -> Parser [a]
     exactlyN pa n = 
@@ -176,6 +178,15 @@ module Data.SimpleParser
                    ; _  <- pb
                    ; return xa }
 
+    failure :: String -> Parser a
+    failure msg = Parser $ \_ -> Failure msg 
+
+    -- Can we make this tail recursive
+    anyOf :: String -> Parser Char 
+    anyOf (h:t) = (char h) <|> (anyOf t)
+    anyOf []    = failure "Could not match any symbols"
+
+
     data Date = Date { month :: Int, day :: Int, year :: Int} 
                 deriving (Show)
 
@@ -194,5 +205,4 @@ module Data.SimpleParser
               ; char '/' 
               ; year <- integer
               ; return $ Date month day year }
-    --date = fmap (\(x,(y,z)) -> Date x y z) (integer .>>. ((char '/') >>. integer .>>. ((char '/') >>. integer)))
 
