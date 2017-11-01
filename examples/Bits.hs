@@ -11,22 +11,28 @@ data Op2 = AND
          | OR 
          | XOR 
          | PLUS
-          deriving (Show) 
+         | ASSIGN
+         | GET
+         deriving (Show) 
 
 data Op1 = NEG deriving (Show)
 
 data Expression = Number [Bit]
+                | Var String
                 | BinaryOp Op2 Expression Expression
                 | UnaryOp Op1 Expression 
+                | Get Expression Int
                 deriving (Show)
 
 data Bit = H | L deriving Show 
 
---eval :: Expression -> Int
---eval (Op AND lhs rhs) = (eval lhs) .&. (eval rhs)
---eval (Op OR  lhs rhs) = (eval lhs) .|.  (eval rhs)
---eval (Op XOR lhs rhs) = (eval lhs) `xor` (eval rhs)
---eval (Number x _)       = x
+eval :: Expression -> Int
+eval (Get (Number l) i) = 
+    case l !! i of 
+        L -> 0
+        H -> 1 
+eval _ = 43 
+
 
 --(.|.)  
 bitHeader :: Parser Int
@@ -59,11 +65,15 @@ negToken :: Parser Op1
 negToken = do { _ <- char '~'
               ; return NEG}    
 
+assignToken :: Parser Op2 
+assignToken = do { _ <- char '=' 
+                 ; return ASSIGN}
+
 token2 :: Parser Op2
-token2 = andToken <|> orToken <|> xorToken
+token2 = andToken <|> orToken <|> xorToken <|> assignToken 
 
 token1 :: Parser Op1
-token1 = negToken 
+token1 = negToken  
 
 number :: Parser Expression
 number = do { numBits <- bitHeader
@@ -72,16 +82,28 @@ number = do { numBits <- bitHeader
  
 binaryExpression :: Parser Expression
 binaryExpression = 
-    do { x <- number 
+    do { _ <- char '~'
+       ; x <- expression
        ; _ <- spaces
        ; t <- token2
        ; _ <- spaces 
-       ; y <- number
+       ; y <- expression
        ; return $ BinaryOp t x y }
+
+
+--variable :: Parser Expression 
+--variable = do { _ <- string "let"
+--              ; _ <- spaces
+--              ; x <-  
+--              ; _ <- spaces 
+--              ; return Var x }
 
 unaryExpression :: Parser Expression
 unaryExpression = 
     do { t <- token1
-       ; _ <- spaces 
        ; x <- number
-       ; return $ UnaryOp t x }       
+       ; return $ UnaryOp t x }      
+       
+
+expression :: Parser Expression 
+expression = number <|> binaryExpression

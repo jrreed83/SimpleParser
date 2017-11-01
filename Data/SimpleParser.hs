@@ -18,6 +18,7 @@ module Data.SimpleParser
     , spaces
     , anyOf
     , failure
+    , anyString
     ) where
         
     import Data.Time
@@ -197,6 +198,9 @@ module Data.SimpleParser
 
     spaces :: Parser String 
     spaces = many (char ' ')
+
+    anyString :: Parser String 
+    anyString = Parser $ \s -> Success s []
 
     date :: Parser Date
     date = do { month <- integer 
