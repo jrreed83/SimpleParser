@@ -18,8 +18,9 @@ data Op2 = AND
 
 data Op1 = NEG deriving (Show)
 
-data Expression = Number Int
-                | Var String
+
+data Expression = Number {size::Int, val::Int}
+                | Var {size::Int, name::String}
                 | BinaryOp Op2 Expression Expression
                 | UnaryOp Op1 Expression 
                 | Get Expression Int
@@ -27,7 +28,20 @@ data Expression = Number Int
 
 data Bit = H | L deriving Show 
 
---(.|.)  
+wire :: Parser Expression
+wire = 
+    do { _ <- string "wire"
+       ; _ <- spaces
+       ; _ <- char '['
+       ; i <- anyDigit 
+       ; _ <- char ':' 
+       ; j <- anyDigit 
+       ; _ <- char ']'     
+       ; _ <- spaces 
+       ; _ <- char 'x'
+       ; _ <- char ';'        
+       ; return (Var 3 "x") }
+
 bitHeader :: Parser Int
 bitHeader = anyDigit .>> (string "'b")
 
@@ -40,7 +54,18 @@ low = do { _ <- digit 0
          ; return L }
 
 bits2int :: [Bit] -> Int 
-bits2int _ = 42 
+bits2int lst = 
+     loop lst 0 0 
+     where loop []    _ accum = accum 
+           loop (L:t) i accum = loop t (i+1) accum
+           loop (H:t) i accum = loop t (i+1) (accum + (shiftL 1 i))
+
+--int2bit :: Int -> [Bit]
+--int2bit x = 
+--    loop x 0 []
+--    where loop 0 _ lst = lst
+--          loop y i lst = loop (shiftR y 1) i+1 (h:lst)
+--                         where h = if (lst .&. 1 == 1) then H else L
 
 andToken :: Parser Op2 
 andToken = do { _ <- char '&'
@@ -71,7 +96,7 @@ token1 = negToken
 number :: Parser Expression
 number = do { numBits <- bitHeader
             ; list    <- exactlyN (low <|> high) numBits
-            ; return $ Number (bits2int list) }
+            ; return $ Number numBits (bits2int list) }
  
 leftParan :: Parser Char 
 leftParan = char '('
@@ -90,6 +115,9 @@ binaryExpression =
        ; _ <- rightParan
        ; return $ BinaryOp t x y }
 
+eval :: Expression -> Int
+eval (BinaryOp AND left right) = (eval left) .&. (eval right)
+eval (Number _ x)                = x 
 
 --variable :: Parser Expression 
 --variable = do { _ <- string "let"
