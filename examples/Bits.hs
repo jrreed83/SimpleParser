@@ -6,6 +6,7 @@ module Bits
     ) where 
 
 import Data.SimpleParser 
+import Data.Bits 
 
 data Op2 = AND 
          | OR 
@@ -17,7 +18,7 @@ data Op2 = AND
 
 data Op1 = NEG deriving (Show)
 
-data Expression = Number [Bit]
+data Expression = Number Int
                 | Var String
                 | BinaryOp Op2 Expression Expression
                 | UnaryOp Op1 Expression 
@@ -25,14 +26,6 @@ data Expression = Number [Bit]
                 deriving (Show)
 
 data Bit = H | L deriving Show 
-
-eval :: Expression -> Int
-eval (Get (Number l) i) = 
-    case l !! i of 
-        L -> 0
-        H -> 1 
-eval _ = 43 
-
 
 --(.|.)  
 bitHeader :: Parser Int
@@ -46,8 +39,8 @@ low :: Parser Bit
 low = do { _ <- digit 0
          ; return L }
 
-bit :: Parser Bit
-bit = low <|> high
+bits2int :: [Bit] -> Int 
+bits2int _ = 42 
 
 andToken :: Parser Op2 
 andToken = do { _ <- char '&'
@@ -77,17 +70,24 @@ token1 = negToken
 
 number :: Parser Expression
 number = do { numBits <- bitHeader
-            ; list    <- exactlyN bit numBits
-            ; return $ Number list }
+            ; list    <- exactlyN (low <|> high) numBits
+            ; return $ Number (bits2int list) }
  
+leftParan :: Parser Char 
+leftParan = char '('
+
+rightParan :: Parser Char 
+rightParan = char ')'
+
 binaryExpression :: Parser Expression
 binaryExpression = 
-    do { _ <- char '~'
+    do { _ <- leftParan
        ; x <- expression
        ; _ <- spaces
        ; t <- token2
        ; _ <- spaces 
        ; y <- expression
+       ; _ <- rightParan
        ; return $ BinaryOp t x y }
 
 
@@ -106,4 +106,4 @@ unaryExpression =
        
 
 expression :: Parser Expression 
-expression = number <|> binaryExpression
+expression = number <|> binaryExpression <|> unaryExpression
