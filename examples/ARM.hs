@@ -7,43 +7,32 @@ where
     comma :: Parser Char 
     comma = char ',' 
 
-    r0 :: Parser Arg
-    r0 = 
-        do { _ <- string "r0" 
-           ; return R0     }
-
-    r1 :: Parser Arg
-    r1 = 
-        do { _ <- string "r1" 
-           ; return R1     }
-
-    r2 :: Parser Arg
-    r2 = 
-        do { _ <- string "r2" 
-           ; return R2     }
-
-    r3 :: Parser Arg
-    r3 = 
-        do { _ <- string "r3" 
-           ; return R3     }
-
-    immediate :: Parser Arg 
-    immediate = 
+    constant :: Parser Exp
+    constant = 
         do { _ <- string "#"
-           ; return $ Immediate 4}
+           ; return $  Con 4}
+ 
+ 
+    reg :: Int -> Parser Exp
+    reg i = (string ri) >>= ( \_ -> return $ Reg ri)
+          where ri = "r"++(show i)
+  
+    
+    register :: Parser Exp
+    register = (reg 0 ) <|> (reg 1 ) <|> (reg 2 ) <|> (reg 3) <|> (reg 4) <|> 
+               (reg 5 ) <|> (reg 6 ) <|> (reg 7 ) <|> (reg 8) <|> (reg 9) <|> 
+               (reg 10) <|> (reg 10) <|> (reg 11) 
 
-    register :: Parser Arg 
-    register = r0 <|> r1 <|> r2 <|> r3
+    data Op = ADD | SUB | MOV deriving (Show)
 
+    data Exp = Exp3 Op Exp Exp Exp 
+             | Exp2 Op Exp Exp
+             | Exp1 Op Exp 
+             | Reg String
+             | Con Int
+             deriving (Show)    
 
-    data Op = ADD | SUB deriving (Show)
-
-    data Arg = R0 | R1 | R2 | R3 | Immediate Int 
-               deriving (Show)
-
-    data Expression =  ALU Op Arg Arg Arg deriving (Show)
-
-    add :: Parser Expression 
+    add :: Parser Exp
     add = 
         do { _   <- string "ADD" 
            ; _   <- spaces 
@@ -53,5 +42,28 @@ where
            ; rn  <- register 
            ; _   <- comma 
            ; _   <- spaces 
-           ; arg <- immediate <|> register 
-           ; return $ ALU ADD rd rn arg } 
+           ; arg <- constant <|> register 
+           ; return $ Exp3 ADD rd rn arg } 
+
+    sub :: Parser Exp
+    sub =
+        do { _   <- string "SUB" 
+           ; _   <- spaces 
+           ; rd  <- register 
+           ; _   <- comma 
+           ; _   <- spaces 
+           ; rn  <- register 
+           ; _   <- comma 
+           ; _   <- spaces 
+           ; arg <- constant <|> register 
+           ; return $ Exp3 SUB rd rn arg } 
+
+    mov :: Parser Exp
+    mov =
+        do { _   <- string "MOV" 
+           ; _   <- spaces 
+           ; rd  <- register 
+           ; _   <- comma 
+           ; _   <- spaces 
+           ; rn  <- register <|> constant 
+           ; return $ Exp2 MOV rd rn }            
