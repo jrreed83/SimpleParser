@@ -28,6 +28,8 @@ where
              | SUB  Ast Ast Ast
              | MOV  Ast Ast 
              | DREF Ast Ast
+             | LDR  Ast Ast 
+             | STR  Ast Ast
              | Reg  String
              | Dec  Int
              deriving (Show)    
@@ -88,5 +90,25 @@ where
     deref :: Parser Ast 
     deref = derefOffset <|> derefNoOffset  
     
+    ldr :: Parser Ast
+    ldr = 
+        do { _  <- string "LDR"
+           ; _  <- spaces
+           ; rd <- register
+           ; _  <- comma 
+           ; _  <- spaces 
+           ; d  <- deref 
+           ; return $ LDR rd d }
+
+    str :: Parser Ast
+    str = 
+        do { _  <- string "STR"
+           ; _  <- spaces
+           ; rn <- register
+           ; _  <- comma 
+           ; _  <- spaces 
+           ; d  <- deref 
+           ; return $ STR rn d }
+
     parse :: Parser Ast 
     parse = mov <|> add <|> sub 
