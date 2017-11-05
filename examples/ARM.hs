@@ -14,15 +14,16 @@ where
            ; return $  Dec d}
  
  
-    reg :: Int -> Parser Ast
-    reg i = (string ri) >>= ( \_ -> return $ Reg ri)
-          where ri = "r"++(show i)
+    register :: Parser Ast 
+    register = 
+        do { _ <- char 'r' 
+           ; i <- integer 
+           ; return $ Reg i }
   
-    
-    register :: Parser Ast
-    register = (reg 0 ) <|> (reg 1 ) <|> (reg 2 ) <|> (reg 3) <|> (reg 4) <|> 
-               (reg 5 ) <|> (reg 6 ) <|> (reg 7 ) <|> (reg 8) <|> (reg 9) <|> 
-               (reg 10) <|> (reg 10) <|> (reg 11) 
+    --register :: Parser Ast
+    --register = (reg 0 ) <|> (reg 1 ) <|> (reg 2 ) <|> (reg 3) <|> (reg 4) <|> 
+    --           (reg 5 ) <|> (reg 6 ) <|> (reg 7 ) <|> (reg 8) <|> (reg 9) <|> 
+    --           (reg 10) <|> (reg 10) <|> (reg 11) 
 
     data Ast = ADD  Ast Ast Ast 
              | SUB  Ast Ast Ast
@@ -30,7 +31,7 @@ where
              | DREF Ast Ast
              | LDR  Ast Ast 
              | STR  Ast Ast
-             | Reg  String
+             | Reg  Int
              | Dec  Int
              deriving (Show)    
 
