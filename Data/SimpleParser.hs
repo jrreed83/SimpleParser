@@ -19,6 +19,7 @@ module Data.SimpleParser
     , anyOf
     , failure
     , anyString
+    , label
     ) where
         
     import Data.Time
@@ -82,6 +83,12 @@ module Data.SimpleParser
         fmap (\l -> (fn l)) (many anyDigit)
         where fn l = read (map (head . show) l) :: Int
 
+    label :: String -> Parser a -> Parser a
+    label msg pa = 
+        Parser $
+             \s -> case run pa s of 
+                        Failure _ -> Failure msg
+                        x         -> x 
 
     andThen :: Parser a -> Parser b -> Parser (a,b)
     andThen parser1 parser2 = 

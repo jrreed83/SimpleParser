@@ -7,14 +7,14 @@ where
     comma :: Parser Char 
     comma = char ',' 
 
-    decimal :: Parser Ast
+    decimal :: Parser Exp
     decimal = 
         do { _ <- string "#"
            ; d <- anyDigit
            ; return $  Dec d}
  
  
-    register :: Parser Ast 
+    register :: Parser Exp 
     register = 
         do { _ <- char 'r' 
            ; i <- integer 
@@ -25,17 +25,17 @@ where
     --           (reg 5 ) <|> (reg 6 ) <|> (reg 7 ) <|> (reg 8) <|> (reg 9) <|> 
     --           (reg 10) <|> (reg 10) <|> (reg 11) 
 
-    data Ast = ADD  Ast Ast Ast 
-             | SUB  Ast Ast Ast
-             | MOV  Ast Ast 
-             | DREF Ast Ast
-             | LDR  Ast Ast 
-             | STR  Ast Ast
-             | Reg  Int
-             | Dec  Int
+    data Exp = Add    Exp Exp Exp
+             | Sub    Exp Exp Exp
+             | Move   Exp Exp 
+             | Dref   Exp Exp
+             | Load   Exp Exp 
+             | Store  Exp Exp
+             | Reg    Int
+             | Dec    Int
              deriving (Show)    
 
-    add :: Parser Ast
+    add :: Parser Exp
     add = 
         do { _   <- string "ADD" 
            ; _   <- spaces 
@@ -46,9 +46,9 @@ where
            ; _   <- comma 
            ; _   <- spaces 
            ; arg <- decimal <|> register 
-           ; return $ ADD rd rn arg } 
+           ; return $ Add rd rn arg } 
 
-    sub :: Parser Ast
+    sub :: Parser Exp
     sub =
         do { _   <- string "SUB" 
            ; _   <- spaces 
@@ -59,9 +59,9 @@ where
            ; _   <- comma 
            ; _   <- spaces 
            ; arg <- decimal <|> register 
-           ; return $ SUB rd rn arg } 
+           ; return $ Sub rd rn arg } 
 
-    mov :: Parser Ast
+    mov :: Parser Exp
     mov =
         do { _   <- string "MOV" 
            ; _   <- spaces 
@@ -69,9 +69,9 @@ where
            ; _   <- comma 
            ; _   <- spaces 
            ; rn  <- register <|> decimal 
-           ; return $ MOV rd rn }            
+           ; return $ Move rd rn }            
     
-    derefOffset :: Parser Ast 
+    derefOffset :: Parser Exp 
     derefOffset = 
         do { _      <- char '['
            ; rn     <- register
@@ -79,19 +79,19 @@ where
            ; _      <- spaces
            ; offset <- decimal 
            ; _      <- char ']'
-           ; return $ DREF rn offset } 
+           ; return $ Dref rn offset } 
 
-    derefNoOffset :: Parser Ast 
+    derefNoOffset :: Parser Exp 
     derefNoOffset = 
         do { _      <- char '['
            ; rn     <- register  
            ; _      <- char ']'
-           ; return $ DREF rn (Dec 0) } 
+           ; return $ Dref rn (Dec 0) } 
 
-    deref :: Parser Ast 
+    deref :: Parser Exp 
     deref = derefOffset <|> derefNoOffset  
     
-    ldr :: Parser Ast
+    ldr :: Parser Exp
     ldr = 
         do { _  <- string "LDR"
            ; _  <- spaces
@@ -99,17 +99,28 @@ where
            ; _  <- comma 
            ; _  <- spaces 
            ; d  <- deref 
-           ; return $ LDR rd d }
+           ; return $ Load rd d }
 
-    str :: Parser Ast
+    str :: Parser Exp
     str = 
         do { _  <- string "STR"
            ; _  <- spaces
-           ; rn <- register
+           ; rn <- (label "expect register" register)
            ; _  <- comma 
            ; _  <- spaces 
            ; d  <- deref 
-           ; return $ STR rn d }
+           ; return $ Store rn d }
 
-    parse :: Parser Ast 
-    parse = mov <|> add <|> sub 
+    parse :: Parser Exp 
+    parse = mov <|> add <|> sub <|> str <|> ldr
+
+    getAst :: String -> IO (Either String Exp) 
+    getAst fileName = do 
+          contents <- readFile fileName 
+          return $ case run parse contents of 
+                           Success x r -> Right x
+                           Failure msg -> Left msg
+                            
+
+
+    
