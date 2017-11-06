@@ -34,6 +34,9 @@ where
              | Reg    Int
              | Dec    Int
              deriving (Show)    
+    
+    eol :: Parser String 
+    eol = (string "\n") <|> spaces 
 
     add :: Parser Exp
     add = 
@@ -112,14 +115,25 @@ where
            ; return $ Store rn d }
 
     parse :: Parser Exp 
-    parse = mov <|> add <|> sub <|> str <|> ldr
+    parse = do 
+             exp <- mov <|> add <|> sub <|> str <|> ldr
+             _   <- eol 
+             return exp
 
-    getAst :: String -> IO (Either String Exp) 
+    parseAll :: String -> Either String [Exp]
+    parseAll lines =
+        parseAll' lines []
+        where parseAll' []    acc = Right acc
+              parseAll' lines acc =  
+                   case run parse lines of 
+                        Failure msg -> Left msg 
+                        Success x r -> parseAll' r (acc ++ [x]) 
+              
+
+    getAst :: String -> IO (Either String [Exp]) 
     getAst fileName = do 
           contents <- readFile fileName 
-          return $ case run parse contents of 
-                           Success x r -> Right x
-                           Failure msg -> Left msg
+          return $ parseAll contents
                             
 
 
