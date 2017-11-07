@@ -91,26 +91,19 @@ module Data.SimpleParser
                         x         -> x 
 
     andThen :: Parser a -> Parser b -> Parser (a,b)
-    andThen parser1 parser2 = 
-         do { x <- parser1
-            ; y <- parser2
-            ; return (x,y) }
---        Parser $ 
---             \s -> case run parser1 s of 
---                        Failure x      -> Failure x 
---                        Success m1 r1  -> case run parser2 r1 of
---                                               Failure m      -> Failure m 
---                                               Success m2 r2  -> Success (m1,m2) r2   
+    andThen pa pb = do { x <- pa
+                       ; y <- pb
+                       ; return (x,y) }
 
     (.>>.) :: Parser a -> Parser b -> Parser (a,b) 
     (.>>.) = andThen
 
     alt :: Parser a -> Parser a -> Parser a 
-    alt parser1 parser2 = 
+    alt p1 p2 = 
         Parser $
-             \s -> case run parser1 s of
+             \s -> case run p1 s of
                         Success m r -> Success m r
-                        Failure _   -> run parser2 s
+                        Failure _   -> run p2 s
 
     (<|>) :: Parser a -> Parser a -> Parser a 
     (<|>) = alt
@@ -194,26 +187,15 @@ module Data.SimpleParser
     anyOf (h:t) = (char h) <|> (anyOf t)
     anyOf []    = failure "Could not match any symbols"
 
-
-    data Date = Date { month :: Int, day :: Int, year :: Int} 
-                deriving (Show)
-
-    translate :: Date -> UTCTime
-    translate (Date m d y) = 
-        let str = printf "%02d/%02d/%d" m d y
-        in  parseTimeOrError False defaultTimeLocale "%m/%d/%Y" str :: UTCTime
-
     spaces :: Parser String 
     spaces = many (char ' ')
 
     anyString :: Parser String 
     anyString = Parser $ \s -> Success s []
 
-    date :: Parser Date
-    date = do { month <- integer 
-              ; char '/'
-              ; day <- integer
-              ; char '/' 
-              ; year <- integer
-              ; return $ Date month day year }
+    -- Parse until we hit String
+    --until :: Parser a -> String -> Parser a 
+
+
+
 

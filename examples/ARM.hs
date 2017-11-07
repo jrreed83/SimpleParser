@@ -3,6 +3,21 @@ module ARM
 where
 
     import Data.SimpleParser
+    import Data.IORef 
+
+    plus :: IORef Int -> IORef Int -> IORef Int -> IO () 
+    plus x y z = 
+        do { y' <- readIORef y 
+           ; z' <- readIORef z 
+           ; writeIORef x (y' + z') }
+
+    foo :: IO () 
+    foo = do { x <- newIORef 1 
+             ; y <- newIORef 2 
+             ; z <- newIORef 65 
+             ; plus x y z
+             ; x' <- readIORef x 
+             ; print x' } 
 
     comma :: Parser Char 
     comma = char ',' 
@@ -10,7 +25,7 @@ where
     decimal :: Parser Exp
     decimal = 
         do { _ <- string "#"
-           ; d <- anyDigit
+           ; d <- integer
            ; return $  Dec d}
  
  
@@ -20,11 +35,6 @@ where
            ; i <- integer 
            ; return $ Reg i }
   
-    --register :: Parser Ast
-    --register = (reg 0 ) <|> (reg 1 ) <|> (reg 2 ) <|> (reg 3) <|> (reg 4) <|> 
-    --           (reg 5 ) <|> (reg 6 ) <|> (reg 7 ) <|> (reg 8) <|> (reg 9) <|> 
-    --           (reg 10) <|> (reg 10) <|> (reg 11) 
-
     data Exp = Add    Exp Exp Exp
              | Sub    Exp Exp Exp
              | Move   Exp Exp 
@@ -35,6 +45,9 @@ where
              | Dec    Int
              deriving (Show)    
     
+    semicolon :: Parser Char 
+    semicolon = char ';'
+
     eol :: Parser String 
     eol = (string "\n") <|> spaces 
 
@@ -114,11 +127,13 @@ where
            ; d  <- deref 
            ; return $ Store rn d }
 
+    anyExpression :: Parser Exp 
+    anyExpression = mov <|> add <|> sub <|> str <|> ldr
+
     parse :: Parser Exp 
-    parse = do 
-             exp <- mov <|> add <|> sub <|> str <|> ldr
-             _   <- eol 
-             return exp
+    parse = do { exp <- anyExpression
+               ; _   <- eol 
+               ; return exp }
 
     parseAll :: String -> Either String [Exp]
     parseAll lines =
@@ -131,10 +146,24 @@ where
               
 
     getAst :: String -> IO (Either String [Exp]) 
-    getAst fileName = do 
-          contents <- readFile fileName 
-          return $ parseAll contents
+    getAst fileName = 
+        do { contents <- readFile fileName 
+           ; return $ parseAll contents }
                             
 
+    data CPU = CPU { registers :: [IORef Int]}
 
-    
+    initCPU :: IO CPU 
+    initCPU = do { r0 <- newIORef 0
+                 ; r1 <- newIORef 0
+                 ; return $ CPU [r0,r1]}
+
+    test' :: IO ()
+    test' = do { cpu <- initCPU 
+               ; let r  = registers cpu
+               ; let r0 = r !! 0
+               ; x <- readIORef r0
+               ; writeIORef r0 (x+3)
+               ; y <- readIORef r0
+               ; print x 
+               ; print y}
