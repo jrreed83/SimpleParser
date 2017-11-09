@@ -188,17 +188,12 @@ where
            ; writeIORef (r !! d) (x+y) }
     eval (Move (Reg d) (Dec x)) cpu = 
         do { let r = registers cpu 
-           ; writeIORef (r !! d) (x) }
-
+           ; writeIORef (r !! d) x }
+    eval (Move (Reg d) (Reg m)) cpu = 
+        do { let r = registers cpu
+           ; x <- readIORef ( r !! m) 
+           ; writeIORef (r !! d) x }  
+             
     main :: IO () 
     main = do cpu <- initCPU 
               bar cpu 
-    --test' :: IO ()
-    --test' = do { cpu <- initCPU 
-    --           ; let r  = registers cpu
-    --           ; let r0 = r !! 0
-    --           ; x <- readIORef r0
-    --           ; writeIORef r0 (x+3)
-    --           ; y <- readIORef r0
-    --           ; print x 
-    --           ; print y}
