@@ -153,20 +153,36 @@ where
                  ; r5 <- newIORef 0                                               
                  ; return $ CPU [r0,r1,r2,r3,r4,r5]}
 
-    runAll :: [Int] -> IO CPU -> IO ()
-    runAll (h:t) cpu = do { cpu' <- cpu 
-                          ; let r = registers cpu' 
-                          ; let r0 = r !! 0
-                          ; modifyIORef r0 (+1)
-                          ; y <- readIORef r0 
-                          ; print y
-                          ; runAll t cpu}
-    runAll []    cpu =  do { cpu' <- cpu 
-                           ; let r = registers cpu' 
-                           ; let r0 = r !! 0
-                           ; x <- readIORef r0 
-                           ; print x }
+    action :: IO CPU 
+    action = do { cpu <- initCPU 
+                ; let r = (registers cpu)
+                ; let r0 = r !! 0 
+                ; let r1 = r !! 1 
+                ; modifyIORef r1 (+ 5)
+                ; x <- readIORef r1 
+                ; print x 
+                ; return cpu }
+                    
 
+    bar :: CPU -> IO () 
+    bar cpu = do let r = registers cpu   
+                 putStr "ARM>"
+                 l <- getLine 
+                 case run add l of
+                    Success a _ -> 
+                       putStrLn (show a)
+                       do x <- readIORef (r !! 5) 
+                          print x
+                    Failure msg -> 
+                       putStrLn msg
+                 x <- readIORef (r !! 0)
+                 modifyIORef (r !! 0) (+ 1)
+                 putStrLn (show x)
+                 bar cpu
+
+    main :: IO () 
+    main = do cpu <- initCPU 
+              bar cpu 
     --test' :: IO ()
     --test' = do { cpu <- initCPU 
     --           ; let r  = registers cpu
