@@ -123,7 +123,8 @@ where
     anyExpression = mov <|> add <|> sub <|> str <|> ldr
 
     parse :: Parser Exp 
-    parse = do { exp <- anyExpression
+    parse = do { _   <- spaces
+               ; exp <- anyExpression
                ; _   <- eol 
                ; return exp }
 
@@ -168,17 +169,26 @@ where
     bar cpu = do let r = registers cpu   
                  putStr "ARM>"
                  l <- getLine 
-                 case run add l of
-                    Success a _ -> 
+                 case run parse l of
+                    Success a _ -> do 
+                       eval a cpu                      
                        putStrLn (show a)
-                       do x <- readIORef (r !! 5) 
-                          print x
-                    Failure msg -> 
+                    Failure msg -> do
                        putStrLn msg
                  x <- readIORef (r !! 0)
-                 modifyIORef (r !! 0) (+ 1)
+
                  putStrLn (show x)
                  bar cpu
+    
+    eval :: Exp -> CPU -> IO () 
+    eval (Add (Reg d) (Reg n) (Reg m)) cpu = 
+        do { let r = registers cpu 
+           ; x <- readIORef (r !! n)
+           ; y <- readIORef (r !! m)
+           ; writeIORef (r !! d) (x+y) }
+    eval (Move (Reg d) (Dec x)) cpu = 
+        do { let r = registers cpu 
+           ; writeIORef (r !! d) (x) }
 
     main :: IO () 
     main = do cpu <- initCPU 
