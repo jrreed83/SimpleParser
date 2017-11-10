@@ -91,9 +91,12 @@ module Data.SimpleParser
                         x         -> x 
 
     andThen :: Parser a -> Parser b -> Parser (a,b)
-    andThen pa pb = do { x <- pa
-                       ; y <- pb
-                       ; return (x,y) }
+    andThen pa pb = pa >>= (\x -> 
+                    pb >>= (\y -> 
+                    return (x,y)))
+    --andThen pa pb = do { x <- pa
+    --                   ; y <- pb
+    --                   ; return (x,y) }
 
     (.>>.) :: Parser a -> Parser b -> Parser (a,b) 
     (.>>.) = andThen
@@ -118,10 +121,13 @@ module Data.SimpleParser
 
     map2 :: ((a,b) -> c) -> Parser a -> Parser b -> Parser c
 --    map2 f pa pb = fmap f (pa .>>. pb)
-    map2 f pa pb = 
-        do { x <- pa 
-           ; y <- pb 
-           ; return $ f (x, y) }
+    map2 f pa pb = pa >>= (\x -> 
+                   pb >>= (\y -> 
+                   return $ f (x,y)))
+--    map2 f pa pb = 
+--        do { x <- pa 
+--           ; y <- pb 
+--           ; return $ f (x, y) }
 
     many :: Parser a -> Parser [a]
     many pa = 
@@ -154,10 +160,14 @@ module Data.SimpleParser
                         Failure msg1  -> Failure msg1
                         Success x1 r1 -> run (f x1) r1 
 
-    apply :: Parser (a -> b) -> Parser a -> Parser b 
-    apply pf pa = do { f  <- pf
-                     ; xa <- pa 
-                     ; return (f xa)}
+    apply :: Parser (a -> b) -> Parser a -> Parser b
+    apply pf pa = pf >>= (\f -> 
+                  pa >>= (\x -> 
+                  return $ f x))
+
+--    apply pf pa = do { f  <- pf
+--                     ; xa <- pa 
+--                     ; return (f xa)}
 --        Parser $
 --             \s -> case run pf s of
 --                        Failure msg -> Failure msg 

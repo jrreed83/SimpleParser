@@ -4,21 +4,9 @@ where
 
     import Data.SimpleParser
     import Data.IORef 
+    import Text.Printf 
 
     data Instruction = Instruction { address::Int }
-
-    plus :: IORef Int -> IORef Int -> IORef Int -> IO () 
-    plus x y z = do { y' <- readIORef y 
-                    ; z' <- readIORef z 
-                    ; writeIORef x (y' + z') }
-
-    foo :: IO () 
-    foo = do { x <- newIORef 1 
-             ; y <- newIORef 2 
-             ; z <- newIORef 65 
-             ; plus x y z
-             ; x' <- readIORef x 
-             ; print x' } 
 
     comma :: Parser Char 
     comma = char ',' 
@@ -27,7 +15,7 @@ where
     decimal = do { _ <- string "#"
                  ; d <- integer
                  ; return $  Dec d}
- 
+    
  
     register :: Parser Exp 
     register = do { _ <- char 'r' 
@@ -120,30 +108,16 @@ where
              ; return $ Store rn d }
 
     anyExpression :: Parser Exp 
-    anyExpression = mov <|> add <|> sub <|> str <|> ldr
+    anyExpression = mov <|> add <|> sub <|> str <|> ldr <|> register
 
     parse :: Parser Exp 
     parse = do { _   <- spaces
                ; exp <- anyExpression
                ; _   <- eol 
                ; return exp }
-
-    parseAll :: String -> Either String [Exp]
-    parseAll lines =
-        parseAll' lines []
-        where parseAll' []    acc = Right acc
-              parseAll' lines acc =  
-                   case run parse lines of 
-                        Failure msg -> Left msg 
-                        Success x r -> parseAll' r (acc ++ [x]) 
-              
-
-    getInstructions :: String -> IO (Either String [Exp]) 
-    getInstructions fileName = do { contents <- readFile fileName 
-                                  ; return $ parseAll contents }
                             
 
-    data CPU = CPU { registers :: [IORef Int]}
+    data CPU = CPU {registers    :: [IORef Int]}
 
     initCPU :: IO CPU 
     initCPU = do { r0 <- newIORef 0
@@ -153,47 +127,49 @@ where
                  ; r4 <- newIORef 0   
                  ; r5 <- newIORef 0                                               
                  ; return $ CPU [r0,r1,r2,r3,r4,r5]}
+                   
 
-    action :: IO CPU 
-    action = do { cpu <- initCPU 
-                ; let r = (registers cpu)
-                ; let r0 = r !! 0 
-                ; let r1 = r !! 1 
-                ; modifyIORef r1 (+ 5)
-                ; x <- readIORef r1 
-                ; print x 
-                ; return cpu }
-                    
-
-    bar :: CPU -> IO () 
-    bar cpu = do let r = registers cpu   
-                 putStr "ARM>"
-                 l <- getLine 
-                 case run parse l of
-                    Success a _ -> do 
-                       eval a cpu                      
-                       putStrLn (show a)
-                    Failure msg -> do
-                       putStrLn msg
-                 x <- readIORef (r !! 0)
-
-                 putStrLn (show x)
-                 bar cpu
+    loop :: CPU -> IO () 
+    loop cpu = do   
+                 putStr ">>"
+                 l <- getLine -- read 
+                 eval l cpu   -- eval
+                 --dump cpu     -- print
+                 loop cpu     -- loop
     
-    eval :: Exp -> CPU -> IO () 
-    eval (Add (Reg d) (Reg n) (Reg m)) cpu = 
+    eval :: String -> CPU -> IO ()
+    eval str cpu = 
+        case run parse str of
+            Success exp _ -> eval' exp cpu 
+            Failure msg   -> putStrLn "ok"
+        
+    eval' :: Exp -> CPU -> IO () 
+    eval' (Add (Reg d) (Reg n) (Reg m)) cpu = 
         do { let r = registers cpu 
            ; x <- readIORef (r !! n)
            ; y <- readIORef (r !! m)
            ; writeIORef (r !! d) (x+y) }
-    eval (Move (Reg d) (Dec x)) cpu = 
+    eval' (Move (Reg d) (Dec x)) cpu = 
         do { let r = registers cpu 
            ; writeIORef (r !! d) x }
-    eval (Move (Reg d) (Reg m)) cpu = 
+    eval' (Move (Reg d) (Reg m)) cpu = 
         do { let r = registers cpu
            ; x <- readIORef ( r !! m) 
            ; writeIORef (r !! d) x }  
-             
+    eval' (Reg d) cpu = 
+        let r = (registers cpu) !! d 
+        in (readIORef r) >>= (\x -> putStrLn $ show x)
+
+    dump :: CPU -> IO () 
+    dump cpu = do { let r  = registers cpu 
+                  ; x0 <- readIORef $ r !! 0
+                  ; x1 <- readIORef $ r !! 1
+                  ; x2 <- readIORef $ r !! 2
+                  ; x3 <- readIORef $ r !! 3
+                  ; x4 <- readIORef $ r !! 4
+                  ; x5 <- readIORef $ r !! 5
+                  ; putStrLn $ printf "0x%04X 0x%04X" x0 x1 }
+
     main :: IO () 
     main = do cpu <- initCPU 
-              bar cpu 
+              loop cpu 
