@@ -54,10 +54,11 @@ module Data.SimpleParser
         return x = success x 
 
     char :: Char -> Parser Char
-    char x = Parser $  
-                   \(h:t) -> if (h == x) then 
+    char x = Parser fn
+             where fn []    = Failure "Nothing to match"
+                   fn (h:t) = if (h == x) then 
                                 Success x t 
-                             else 
+                              else 
                                 Failure ("Expected " ++ [x] ++ " but got " ++ [h])  
 
     success :: a -> Parser a 

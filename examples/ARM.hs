@@ -2,9 +2,9 @@ module ARM
 
 where
 
-    import Data.SimpleParser
-    import Data.IORef 
+    import Data.SimpleParser 
     import Text.Printf 
+    import qualified Data.ByteString as B
 
     data Instruction = Instruction { address::Int }
 
@@ -31,7 +31,7 @@ where
              | Reg    Int
              | Dec    Int
              deriving (Show)    
-    
+
     semicolon :: Parser Char 
     semicolon = char ';'
 
@@ -107,6 +107,9 @@ where
              ; d  <- deref 
              ; return $ Store rn d }
 
+--    dump :: Parser Debug
+--    dump = (string ":dump") >>= return Dump
+
     anyExpression :: Parser Exp 
     anyExpression = mov <|> add <|> sub <|> str <|> ldr <|> register
 
@@ -116,60 +119,64 @@ where
                ; _   <- eol 
                ; return exp }
                             
+    data CPU = CPU { r0 :: Int 
+                   , r1 :: Int
+                   , r2 :: Int 
+                   , r3 :: Int 
+                   , r4 :: Int 
+                   , r5 :: Int}
 
-    data CPU = CPU {registers    :: [IORef Int]}
+    initCPU :: CPU 
+    initCPU = CPU 0 0 0 0 0 0
+               
+    getReg :: Int -> CPU -> Int 
+    getReg 0 (CPU a b c d e f) = a 
+    getReg 1 (CPU a b c d e f) = b  
+    getReg 2 (CPU a b c d e f) = c 
+    getReg 3 (CPU a b c d e f) = d  
+    getReg 4 (CPU a b c d e f) = e  
 
-    initCPU :: IO CPU 
-    initCPU = do { r0 <- newIORef 0
-                 ; r1 <- newIORef 0
-                 ; r2 <- newIORef 0     
-                 ; r3 <- newIORef 0
-                 ; r4 <- newIORef 0   
-                 ; r5 <- newIORef 0                                               
-                 ; return $ CPU [r0,r1,r2,r3,r4,r5]}
-                   
+    setReg :: Int -> Int -> CPU -> CPU 
+    setReg 0 x (CPU a b c d e f) = CPU x b c d e f
+    setReg 1 x (CPU a b c d e f) = CPU a x c d e f  
+    setReg 2 x (CPU a b c d e f) = CPU a b x d e f
+    setReg 3 x (CPU a b c d e f) = CPU a b c x e f      
+    setReg 4 x (CPU a b c d e f) = CPU a b c d x f  
+    setReg 5 x (CPU a b c d e f) = CPU a b c d e x  
 
     loop :: CPU -> IO () 
     loop cpu = do   
                  putStr ">>"
                  l <- getLine -- read 
-                 eval l cpu   -- eval
-                 --dump cpu     -- print
-                 loop cpu     -- loop
+                 -- Want to check whether it's an expression
+                 -- or some sort of debug command
+                 case eval l cpu of 
+                    Right cpu' -> loop cpu'
+                    Left  msg  -> loop cpu  
     
-    eval :: String -> CPU -> IO ()
+    compileToExp :: String -> Either String Exp 
+    compileToExp str = case run parse str of
+                            Success exp _ -> Right exp 
+                            Failure msg   -> Left msg 
+
+--    compileToByteCode :: Exp -> 
+
+    eval :: String -> CPU -> Either String CPU
     eval str cpu = 
         case run parse str of
-            Success exp _ -> eval' exp cpu 
-            Failure msg   -> putStrLn "ok"
+            Success exp _ -> Right $ eval' exp cpu 
+            Failure msg   -> Left msg
         
-    eval' :: Exp -> CPU -> IO () 
+    eval' :: Exp -> CPU -> CPU
     eval' (Add (Reg d) (Reg n) (Reg m)) cpu = 
-        do { let r = registers cpu 
-           ; x <- readIORef (r !! n)
-           ; y <- readIORef (r !! m)
-           ; writeIORef (r !! d) (x+y) }
+        let xn = getReg n cpu
+            xm = getReg m cpu
+        in  setReg d (xm + xn) cpu
     eval' (Move (Reg d) (Dec x)) cpu = 
-        do { let r = registers cpu 
-           ; writeIORef (r !! d) x }
-    eval' (Move (Reg d) (Reg m)) cpu = 
-        do { let r = registers cpu
-           ; x <- readIORef ( r !! m) 
-           ; writeIORef (r !! d) x }  
-    eval' (Reg d) cpu = 
-        let r = (registers cpu) !! d 
-        in (readIORef r) >>= (\x -> putStrLn $ show x)
-
-    dump :: CPU -> IO () 
-    dump cpu = do { let r  = registers cpu 
-                  ; x0 <- readIORef $ r !! 0
-                  ; x1 <- readIORef $ r !! 1
-                  ; x2 <- readIORef $ r !! 2
-                  ; x3 <- readIORef $ r !! 3
-                  ; x4 <- readIORef $ r !! 4
-                  ; x5 <- readIORef $ r !! 5
-                  ; putStrLn $ printf "0x%04X 0x%04X" x0 x1 }
+        setReg d x cpu 
+    eval' (Move (Reg d) (Reg m)) cpu =
+        let xm  = getReg m cpu
+        in  setReg d xm cpu           
 
     main :: IO () 
-    main = do cpu <- initCPU 
-              loop cpu 
+    main = do loop initCPU 
