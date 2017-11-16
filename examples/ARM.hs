@@ -14,6 +14,8 @@ where
     comma :: Parser Char 
     comma = char ',' 
 
+    registerLookup = [R0,R1,R2,R3,R4,R5,R6,R7,R8,R9,R10,R11,R12,R13,R14,R15]
+
     immediate :: Parser Exp
     immediate = do { _ <- string "#"
                  ; d <- integer
@@ -25,13 +27,46 @@ where
                   ; i <- integer 
                   ; return $ Reg i }
 
-    data Op = PLUS | MINUS deriving (Show)
-    data R = R0 | R1 | R2 | R3 | R4 | R5 deriving (Show)
-    data S = DUMP deriving (Show)
-    
-    data Ast = Math Op R R R
-             | Statement S
-               deriving (Show)
+    register' :: Parser R 
+    register' = do  
+                   _ <- char 'r' 
+                   i <- integer 
+                   if 0 <= i && i <= 15 
+                        then return $ registerLookup !! i
+                        else failure "Out of range"
+
+    data Op = Add' 
+            | Sub' 
+            deriving (Show)
+
+    data R = R0 
+           | R1 
+           | R2 
+           | R3 
+           | R4 
+           | R5 
+           | R6
+           | R7
+           | R8
+           | R9 
+           | R10
+           | R11
+           | R12
+           | R13
+           | R14 
+           | R15           
+           | PC 
+           | LR 
+           | SP 
+           deriving (Show)
+
+    data S = DUMP 
+             deriving (Show)
+
+    data Ast = EProcess  Op R R R
+             | EStatement S
+             | ERegister R
+             deriving (Show)
 
     data Exp = Add    Exp Exp Exp
              | Sub    Exp Exp Exp
@@ -78,6 +113,18 @@ where
              ; _   <- spaces 
              ; arg <- immediate <|> register 
              ; return $ Add rd rn arg } 
+
+    add' :: Parser Ast
+    add' = do { _   <- string "ADD" 
+              ; _   <- spaces 
+              ; rd  <- register' 
+              ; _   <- comma 
+              ; _   <- spaces 
+              ; rn  <- register' 
+              ; _   <- comma 
+              ; _   <- spaces 
+              ; rm  <- register' 
+              ; return $ EProcess Add' rd rn rm }     
 
     sub :: Parser Exp
     sub = do { _   <- string "SUB" 
