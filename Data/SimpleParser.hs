@@ -139,7 +139,6 @@ module Data.SimpleParser
                 Success x r  -> fn (accum ++ [x]) r
  
     many1 :: Parser a -> Parser [a]
-    --many1 pa = fmap (\(x,y) -> x : y) (pa .>>. (many pa))
     many1 pa = do { first <- pa
                   ; list  <- many pa
                   ; return (first : list)}
@@ -165,27 +164,14 @@ module Data.SimpleParser
     apply pf pa = pf >>= (\f -> 
                   pa >>= (\x -> 
                   return $ f x))
-
---    apply pf pa = do { f  <- pf
---                     ; xa <- pa 
---                     ; return (f xa)}
---        Parser $
---             \s -> case run pf s of
---                        Failure msg -> Failure msg 
---                        Success f _ -> case run pa s of
---                                            Failure msg -> Failure msg 
---                                            Success x r -> Success (f x) r
     
 
     (>>.) :: Parser a -> Parser b -> Parser b 
-    --pa >>. pb = pa >>= (\_ -> pb)
-    --pa >>. pb = fmap (\(a,b) -> b) (pa .>>. pb)
     pa >>. pb = do { _  <- pa 
                    ; xb <- pb
                    ; return xb }
 
     (.>>) :: Parser a -> Parser b -> Parser a 
-    --pa .>> pb = fmap (\(a,b) -> a) (pa .>>. pb)
     pa .>> pb = do { xa <- pa 
                    ; _  <- pb
                    ; return xa }
@@ -196,7 +182,7 @@ module Data.SimpleParser
     -- Can we make this tail recursive
     anyOf :: String -> Parser Char 
     anyOf (h:t) = (char h) <|> (anyOf t)
-    anyOf []    = failure "Could not match any symbols"
+    anyOf []    = failure "Could not match any symbols in" 
 
     spaces :: Parser String 
     spaces = many (char ' ')

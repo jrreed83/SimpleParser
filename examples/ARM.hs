@@ -4,24 +4,35 @@ where
 
     import Data.SimpleParser 
     import Text.Printf 
-    import qualified Data.ByteString as B
+    import qualified Data.ByteString.Lazy as L
+    import qualified Data.Word as W
+    import qualified Data.Binary.Put as P
+    import Data.Bits 
 
     data Instruction = Instruction { address::Int }
 
     comma :: Parser Char 
     comma = char ',' 
 
-    decimal :: Parser Exp
-    decimal = do { _ <- string "#"
+    immediate :: Parser Exp
+    immediate = do { _ <- string "#"
                  ; d <- integer
-                 ; return $  Dec d}
+                 ; return $  Immed d}
     
  
     register :: Parser Exp 
     register = do { _ <- char 'r' 
                   ; i <- integer 
                   ; return $ Reg i }
-  
+
+    data Op = PLUS | MINUS deriving (Show)
+    data R = R0 | R1 | R2 | R3 | R4 | R5 deriving (Show)
+    data S = DUMP deriving (Show)
+    
+    data Ast = Math Op R R R
+             | Statement S
+               deriving (Show)
+
     data Exp = Add    Exp Exp Exp
              | Sub    Exp Exp Exp
              | Move   Exp Exp 
@@ -29,8 +40,26 @@ where
              | Load   Exp Exp 
              | Store  Exp Exp
              | Reg    Int
-             | Dec    Int
+             | Immed  Int
              deriving (Show)    
+
+--    data DataProcessing = DataProcessing  { cond :: ! W.Word8 
+--                                          , op1  :: ! W.Word8
+--                                          , rn   :: ! W.Word8
+--                                          , rs   :: ! W.Word8 
+--                                          , op2  :: ! W.Word8}
+
+    asWord16 :: (Integral a) => a -> W.Word16 
+    asWord16 x = fromIntegral x
+
+    asWord8 :: (Integral a) => a -> W.Word8 
+    asWord8 x = fromIntegral x
+
+--    baz :: DataProcessing -> L.ByteString 
+--    baz (DataProcessing a b c d e) = 
+--        P.runPut p 
+--        where p = do { P.putWord16le (a .|. (b `shiftL` 11)) 
+--                     ; P.putWord16le c}
 
     semicolon :: Parser Char 
     semicolon = char ';'
@@ -47,7 +76,7 @@ where
              ; rn  <- register 
              ; _   <- comma 
              ; _   <- spaces 
-             ; arg <- decimal <|> register 
+             ; arg <- immediate <|> register 
              ; return $ Add rd rn arg } 
 
     sub :: Parser Exp
@@ -59,24 +88,24 @@ where
              ; rn  <- register 
              ; _   <- comma 
              ; _   <- spaces 
-             ; arg <- decimal <|> register 
+             ; arg <- immediate <|> register 
              ; return $ Sub rd rn arg } 
 
-    mov :: Parser Exp
-    mov = do { _   <- string "MOV" 
-             ; _   <- spaces 
-             ; rd  <- register 
-             ; _   <- comma 
-             ; _   <- spaces 
-             ; rn  <- register <|> decimal 
-             ; return $ Move rd rn }            
+    move :: Parser Exp
+    move = do { _   <- string "MOV" 
+              ; _   <- spaces 
+              ; rd  <- register 
+              ; _   <- comma 
+              ; _   <- spaces 
+              ; rn  <- register <|> immediate 
+              ; return $ Move rd rn }            
     
     derefOffset :: Parser Exp 
     derefOffset = do { _      <- char '['
                      ; rn     <- register
                      ; _      <- comma 
                      ; _      <- spaces
-                     ; offset <- decimal 
+                     ; offset <- immediate 
                      ; _      <- char ']'
                      ; return $ Dref rn offset } 
 
@@ -84,22 +113,22 @@ where
     derefNoOffset = do { _      <- char '['
                        ; rn     <- register  
                        ; _      <- char ']'
-                       ; return $ Dref rn (Dec 0) } 
+                       ; return $ Dref rn (Immed 0) } 
 
     deref :: Parser Exp 
     deref = derefOffset <|> derefNoOffset  
     
-    ldr :: Parser Exp
-    ldr = do { _  <- string "LDR"
-             ; _  <- spaces
-             ; rd <- register
-             ; _  <- comma 
-             ; _  <- spaces 
-             ; d  <- deref 
-             ; return $ Load rd d }
+    load :: Parser Exp
+    load = do { _  <- string "LDR"
+              ; _  <- spaces
+              ; rd <- register
+              ; _  <- comma 
+              ; _  <- spaces 
+              ; d  <- deref 
+              ; return $ Load rd d }
 
-    str :: Parser Exp
-    str = do { _  <- string "STR"
+    store :: Parser Exp
+    store = do { _  <- string "STR"
              ; _  <- spaces
              ; rn <- (label "expect register" register)
              ; _  <- comma 
@@ -107,11 +136,11 @@ where
              ; d  <- deref 
              ; return $ Store rn d }
 
---    dump :: Parser Debug
---    dump = (string ":dump") >>= return Dump
+    dump :: Parser Exp
+    dump = (string ":dump") >>. (return $ Reg 0)
 
     anyExpression :: Parser Exp 
-    anyExpression = mov <|> add <|> sub <|> str <|> ldr <|> register
+    anyExpression = move <|> add <|> sub <|> store <|> load <|> register
 
     parse :: Parser Exp 
     parse = do { _   <- spaces
@@ -160,6 +189,7 @@ where
                             Failure msg   -> Left msg 
 
 --    compileToByteCode :: Exp -> 
+--    eval :: Exp -> CPU -> CPU
 
     eval :: String -> CPU -> Either String CPU
     eval str cpu = 
@@ -172,7 +202,7 @@ where
         let xn = getReg n cpu
             xm = getReg m cpu
         in  setReg d (xm + xn) cpu
-    eval' (Move (Reg d) (Dec x)) cpu = 
+    eval' (Move (Reg d) (Immed x)) cpu = 
         setReg d x cpu 
     eval' (Move (Reg d) (Reg m)) cpu =
         let xm  = getReg m cpu
