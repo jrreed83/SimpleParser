@@ -11,71 +11,28 @@ where
 
     data Instruction = Instruction { address::Int }
 
+
     comma :: Parser Char 
     comma = char ',' 
-
-    registerLookup = [R0,R1,R2,R3,R4,R5,R6,R7,R8,R9,R10,R11,R12,R13,R14,R15]
 
     immediate :: Parser Exp
     immediate = do { _ <- string "#"
                  ; d <- integer
-                 ; return $  Immed d}
+                 ; return $  Immed (asWord32 d)}
     
  
     register :: Parser Exp 
     register = do { _ <- char 'r' 
                   ; i <- integer 
-                  ; return $ Reg i }
+                  ; return $ Reg (asWord8 i) }
 
-    register' :: Parser R 
-    register' = do  
-                   _ <- char 'r' 
-                   i <- integer 
-                   if 0 <= i && i <= 15 
-                        then return $ registerLookup !! i
-                        else failure "Out of range"
+    data Op = ADD | SUB | MOVE | STORE | LOAD | DEREF deriving (Show)
 
-    data Op = Add' 
-            | Sub' 
-            deriving (Show)
-
-    data R = R0 
-           | R1 
-           | R2 
-           | R3 
-           | R4 
-           | R5 
-           | R6
-           | R7
-           | R8
-           | R9 
-           | R10
-           | R11
-           | R12
-           | R13
-           | R14 
-           | R15           
-           | PC 
-           | LR 
-           | SP 
-           deriving (Show)
-
-    data S = DUMP 
-             deriving (Show)
-
-    data Ast = EProcess  Op R R R
-             | EStatement S
-             | ERegister R
-             deriving (Show)
-
-    data Exp = Add    Exp Exp Exp
-             | Sub    Exp Exp Exp
-             | Move   Exp Exp 
-             | Dref   Exp Exp
-             | Load   Exp Exp 
-             | Store  Exp Exp
-             | Reg    Int
-             | Immed  Int
+    data Exp = TrinaryOp Op Exp Exp Exp
+             | BinaryOp  Op Exp Exp 
+             | UnaryOp   Op Exp
+             | Reg       W.Word8
+             | Immed     W.Word32
              deriving (Show)    
 
 --    data DataProcessing = DataProcessing  { cond :: ! W.Word8 
@@ -90,17 +47,14 @@ where
     asWord8 :: (Integral a) => a -> W.Word8 
     asWord8 x = fromIntegral x
 
---    baz :: DataProcessing -> L.ByteString 
---    baz (DataProcessing a b c d e) = 
---        P.runPut p 
---        where p = do { P.putWord16le (a .|. (b `shiftL` 11)) 
---                     ; P.putWord16le c}
+    asWord32 :: (Integral a) => a -> W.Word32 
+    asWord32 x = fromIntegral x
 
     semicolon :: Parser Char 
     semicolon = char ';'
 
     eol :: Parser String 
-    eol = (string "\n") <|> spaces 
+    eol = (string "\n") <|> spaces
 
     add :: Parser Exp
     add = do { _   <- string "ADD" 
@@ -111,20 +65,8 @@ where
              ; rn  <- register 
              ; _   <- comma 
              ; _   <- spaces 
-             ; arg <- immediate <|> register 
-             ; return $ Add rd rn arg } 
-
-    add' :: Parser Ast
-    add' = do { _   <- string "ADD" 
-              ; _   <- spaces 
-              ; rd  <- register' 
-              ; _   <- comma 
-              ; _   <- spaces 
-              ; rn  <- register' 
-              ; _   <- comma 
-              ; _   <- spaces 
-              ; rm  <- register' 
-              ; return $ EProcess Add' rd rn rm }     
+             ; rm  <- register 
+             ; return $ TrinaryOp ADD rd rn rm } 
 
     sub :: Parser Exp
     sub = do { _   <- string "SUB" 
@@ -135,8 +77,8 @@ where
              ; rn  <- register 
              ; _   <- comma 
              ; _   <- spaces 
-             ; arg <- immediate <|> register 
-             ; return $ Sub rd rn arg } 
+             ; rm  <- register 
+             ; return $ TrinaryOp SUB rd rn rm } 
 
     move :: Parser Exp
     move = do { _   <- string "MOV" 
@@ -145,7 +87,7 @@ where
               ; _   <- comma 
               ; _   <- spaces 
               ; rn  <- register <|> immediate 
-              ; return $ Move rd rn }            
+              ; return $ BinaryOp MOVE rd rn }            
     
     derefOffset :: Parser Exp 
     derefOffset = do { _      <- char '['
@@ -154,13 +96,13 @@ where
                      ; _      <- spaces
                      ; offset <- immediate 
                      ; _      <- char ']'
-                     ; return $ Dref rn offset } 
+                     ; return $ BinaryOp DEREF rn offset } 
 
     derefNoOffset :: Parser Exp 
     derefNoOffset = do { _      <- char '['
                        ; rn     <- register  
                        ; _      <- char ']'
-                       ; return $ Dref rn (Immed 0) } 
+                       ; return $ BinaryOp DEREF rn (Immed 0) } 
 
     deref :: Parser Exp 
     deref = derefOffset <|> derefNoOffset  
@@ -172,7 +114,7 @@ where
               ; _  <- comma 
               ; _  <- spaces 
               ; d  <- deref 
-              ; return $ Load rd d }
+              ; return $ BinaryOp LOAD rd d }
 
     store :: Parser Exp
     store = do { _  <- string "STR"
@@ -181,20 +123,23 @@ where
              ; _  <- comma 
              ; _  <- spaces 
              ; d  <- deref 
-             ; return $ Store rn d }
+             ; return $ BinaryOp STORE rn d }
 
     dump :: Parser Exp
     dump = (string ":dump") >>. (return $ Reg 0)
 
-    anyExpression :: Parser Exp 
-    anyExpression = move <|> add <|> sub <|> store <|> load <|> register
 
-    parse :: Parser Exp 
-    parse = do { _   <- spaces
-               ; exp <- anyExpression
+    anyExpression :: Parser Exp 
+    anyExpression = do { _   <- spaces
+               ; exp <- move <|> add <|> sub <|> store <|> load <|> register <|> immediate
                ; _   <- eol 
                ; return exp }
-                            
+    
+    parse :: String -> Either String Exp 
+    parse str = case run anyExpression str of 
+                     Failure msg -> Left msg 
+                     Success e _ -> Right e  
+
     data CPU = CPU { r0 :: Int 
                    , r1 :: Int
                    , r2 :: Int 
@@ -220,40 +165,18 @@ where
     setReg 4 x (CPU a b c d e f) = CPU a b c d x f  
     setReg 5 x (CPU a b c d e f) = CPU a b c d e x  
 
-    loop :: CPU -> IO () 
-    loop cpu = do   
-                 putStr ">>"
-                 l <- getLine -- read 
+
+--    loop :: CPU -> IO () 
+--    loop cpu = do   
+--                 putStr ">>"
+--                 l <- getLine -- read 
                  -- Want to check whether it's an expression
                  -- or some sort of debug command
-                 case eval l cpu of 
-                    Right cpu' -> loop cpu'
-                    Left  msg  -> loop cpu  
+--                 case eval l cpu of 
+--                    Right cpu' -> loop cpu'
+--                    Left  msg  -> loop cpu  
     
-    compileToExp :: String -> Either String Exp 
-    compileToExp str = case run parse str of
-                            Success exp _ -> Right exp 
-                            Failure msg   -> Left msg 
+       
 
---    compileToByteCode :: Exp -> 
---    eval :: Exp -> CPU -> CPU
-
-    eval :: String -> CPU -> Either String CPU
-    eval str cpu = 
-        case run parse str of
-            Success exp _ -> Right $ eval' exp cpu 
-            Failure msg   -> Left msg
-        
-    eval' :: Exp -> CPU -> CPU
-    eval' (Add (Reg d) (Reg n) (Reg m)) cpu = 
-        let xn = getReg n cpu
-            xm = getReg m cpu
-        in  setReg d (xm + xn) cpu
-    eval' (Move (Reg d) (Immed x)) cpu = 
-        setReg d x cpu 
-    eval' (Move (Reg d) (Reg m)) cpu =
-        let xm  = getReg m cpu
-        in  setReg d xm cpu           
-
-    main :: IO () 
-    main = do loop initCPU 
+--    main :: IO () 
+--    main = do loop initCPU 
