@@ -15,12 +15,17 @@ where
     comma :: Parser Char 
     comma = char ',' 
 
+    semicolon :: Parser Char 
+    semicolon = char ';' 
+
+    comments :: Parser String 
+    comments = semicolon >> anyString
+
     immediate :: Parser Exp
     immediate = do { _ <- string "#"
                    ; d <- integer
                    ; return $ Num (asWord32 d)}
-    
- 
+
     register :: Parser Exp 
     register = do { _ <- char 'r' 
                   ; i <- integer 
@@ -53,8 +58,6 @@ where
     asWord32 :: (Integral a) => a -> W.Word32 
     asWord32 x = fromIntegral x
 
-    semicolon :: Parser Char 
-    semicolon = char ';'
 
     eol :: Parser String 
     eol = (string "\n") <|> spaces
