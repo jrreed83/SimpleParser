@@ -17,8 +17,8 @@ where
 
     immediate :: Parser Exp
     immediate = do { _ <- string "#"
-                 ; d <- integer
-                 ; return $  Immed (asWord32 d)}
+                   ; d <- integer
+                   ; return $ Num (asWord32 d)}
     
  
     register :: Parser Exp 
@@ -28,18 +28,21 @@ where
 
     data Op = ADD | SUB | MOVE | STORE | LOAD | DEREF deriving (Show)
 
-    data Exp = TrinaryOp Op Exp Exp Exp
-             | BinaryOp  Op Exp Exp 
-             | UnaryOp   Op Exp
-             | Reg       W.Word8
-             | Immed     W.Word32
+    data Exp = Exp3 Op Exp Exp Exp
+             | Exp2 Op Exp Exp 
+             | Exp1 Op Exp
+             | Reg W.Word8
+             | Num W.Word32
              deriving (Show)    
 
 --    data DataProcessing = DataProcessing  { cond :: ! W.Word8 
---                                          , op1  :: ! W.Word8
+--                                          , Exp1  :: ! W.Word8
 --                                          , rn   :: ! W.Word8
 --                                          , rs   :: ! W.Word8 
---                                          , op2  :: ! W.Word8}
+--                                          , Exp2  :: ! W.Word8}
+
+    eval :: Exp -> () 
+    eval (Exp3 ADD (Reg d) (Reg m) (Reg n)) = ()
 
     asWord16 :: (Integral a) => a -> W.Word16 
     asWord16 x = fromIntegral x
@@ -66,7 +69,7 @@ where
              ; _   <- comma 
              ; _   <- spaces 
              ; rm  <- register 
-             ; return $ TrinaryOp ADD rd rn rm } 
+             ; return $ Exp3 ADD rd rn rm } 
 
     sub :: Parser Exp
     sub = do { _   <- string "SUB" 
@@ -78,7 +81,7 @@ where
              ; _   <- comma 
              ; _   <- spaces 
              ; rm  <- register 
-             ; return $ TrinaryOp SUB rd rn rm } 
+             ; return $ Exp3 SUB rd rn rm } 
 
     move :: Parser Exp
     move = do { _   <- string "MOV" 
@@ -87,7 +90,7 @@ where
               ; _   <- comma 
               ; _   <- spaces 
               ; rn  <- register <|> immediate 
-              ; return $ BinaryOp MOVE rd rn }            
+              ; return $ Exp2 MOVE rd rn }            
     
     derefOffset :: Parser Exp 
     derefOffset = do { _      <- char '['
@@ -96,13 +99,13 @@ where
                      ; _      <- spaces
                      ; offset <- immediate 
                      ; _      <- char ']'
-                     ; return $ BinaryOp DEREF rn offset } 
+                     ; return $ Exp2 DEREF rn offset } 
 
     derefNoOffset :: Parser Exp 
     derefNoOffset = do { _      <- char '['
                        ; rn     <- register  
                        ; _      <- char ']'
-                       ; return $ BinaryOp DEREF rn (Immed 0) } 
+                       ; return $ Exp2 DEREF rn (Num 0) } 
 
     deref :: Parser Exp 
     deref = derefOffset <|> derefNoOffset  
@@ -114,7 +117,7 @@ where
               ; _  <- comma 
               ; _  <- spaces 
               ; d  <- deref 
-              ; return $ BinaryOp LOAD rd d }
+              ; return $ Exp2 LOAD rd d }
 
     store :: Parser Exp
     store = do { _  <- string "STR"
@@ -123,17 +126,16 @@ where
              ; _  <- comma 
              ; _  <- spaces 
              ; d  <- deref 
-             ; return $ BinaryOp STORE rn d }
+             ; return $ Exp2 STORE rn d }
 
     dump :: Parser Exp
     dump = (string ":dump") >>. (return $ Reg 0)
 
-
     anyExpression :: Parser Exp 
     anyExpression = do { _   <- spaces
-               ; exp <- move <|> add <|> sub <|> store <|> load <|> register <|> immediate
-               ; _   <- eol 
-               ; return exp }
+                       ; exp <- move <|> add <|> sub <|> store <|> load <|> register <|> immediate
+                       ; _   <- eol 
+                       ; return exp }
     
     parse :: String -> Either String Exp 
     parse str = case run anyExpression str of 
