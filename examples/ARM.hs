@@ -8,6 +8,7 @@ where
     import qualified Data.Word as W
     import qualified Data.Binary.Put as P
     import Data.Bits 
+    import Data.IORef 
 
     data Instruction = Instruction { address::Int }
 
@@ -17,6 +18,12 @@ where
 
     semicolon :: Parser Char 
     semicolon = char ';' 
+
+    lbracket :: Parser Char 
+    lbracket = char '['
+
+    rbracket :: Parser Char 
+    rbracket = char ']'
 
     comments :: Parser String 
     comments = semicolon >> anyString
@@ -46,8 +53,11 @@ where
 --                                          , rs   :: ! W.Word8 
 --                                          , Exp2  :: ! W.Word8}
 
-    eval :: Exp -> () 
-    eval (Exp3 ADD (Reg d) (Reg m) (Reg n)) = ()
+--    u8 :: Parser W.Word8 
+--    u8 
+
+--    u16 :: Parser W.Word16 
+
 
     asWord16 :: (Integral a) => a -> W.Word16 
     asWord16 x = fromIntegral x
@@ -58,6 +68,8 @@ where
     asWord32 :: (Integral a) => a -> W.Word32 
     asWord32 x = fromIntegral x
 
+    asInt :: (Integral a) => a -> Int 
+    asInt x = fromIntegral x 
 
     eol :: Parser String 
     eol = (string "\n") <|> spaces
@@ -96,18 +108,18 @@ where
               ; return $ Exp2 MOVE rd rn }            
     
     derefOffset :: Parser Exp 
-    derefOffset = do { _      <- char '['
+    derefOffset = do { _      <- lbracket
                      ; rn     <- register
                      ; _      <- comma 
                      ; _      <- spaces
                      ; offset <- immediate 
-                     ; _      <- char ']'
+                     ; _      <- rbracket
                      ; return $ Exp2 DEREF rn offset } 
 
     derefNoOffset :: Parser Exp 
-    derefNoOffset = do { _      <- char '['
+    derefNoOffset = do { _      <- lbracket
                        ; rn     <- register  
-                       ; _      <- char ']'
+                       ; _      <- rbracket
                        ; return $ Exp2 DEREF rn (Num 0) } 
 
     deref :: Parser Exp 
@@ -145,31 +157,46 @@ where
                      Failure msg -> Left msg 
                      Success e _ -> Right e  
 
-    data CPU = CPU { r0 :: Int 
-                   , r1 :: Int
-                   , r2 :: Int 
-                   , r3 :: Int 
-                   , r4 :: Int 
-                   , r5 :: Int}
+    data CPU = CPU { genReg :: [IORef W.Word32]
+                   , pc     :: IORef W.Word32
+                   , sp     :: IORef W.Word32 
+                   , lr     :: IORef W.Word32}
 
-    initCPU :: CPU 
-    initCPU = CPU 0 0 0 0 0 0
+    initCPU :: IO CPU 
+    initCPU = do { r0  <- newIORef 0
+                 ; r1  <- newIORef 0
+                 ; r2  <- newIORef 0  
+                 ; r3  <- newIORef 0
+                 ; r4  <- newIORef 0 
+                 ; r5  <- newIORef 4
+                 ; r6  <- newIORef 6  
+                 ; r7  <- newIORef 0
+                 ; r8  <- newIORef 0    
+                 ; r9  <- newIORef 0
+                 ; r10 <- newIORef 0  
+                 ; r11 <- newIORef 0
+                 ; r12 <- newIORef 0        
+                 ; pc  <- newIORef 0 
+                 ; sp  <- newIORef 0 
+                 ; lr  <- newIORef 0
+                 ; return $ CPU [r0,r1,r2,r3,r4,r5,r6,r7,r8,r9,r10,r11,r12] pc sp lr} 
                
-    getReg :: Int -> CPU -> Int 
-    getReg 0 (CPU a b c d e f) = a 
-    getReg 1 (CPU a b c d e f) = b  
-    getReg 2 (CPU a b c d e f) = c 
-    getReg 3 (CPU a b c d e f) = d  
-    getReg 4 (CPU a b c d e f) = e  
+    eval :: Exp -> CPU -> IO W.Word32 
+    eval (Exp3 ADD (Reg d) (Reg m) (Reg n)) cpu = 
+        do { let r  = genReg cpu
+           ; let m' = (asInt m)
+           ; let n' = (asInt n)   
+           ; let d' = (asInt d)                         
+           ; rm <- readIORef (r !! m') 
+           ; rn <- readIORef (r !! n')
+           ; _  <- writeIORef (r !! d') (rm + rn)
+           ; rd <- readIORef (r !! d')
+           ; return rd }
 
-    setReg :: Int -> Int -> CPU -> CPU 
-    setReg 0 x (CPU a b c d e f) = CPU x b c d e f
-    setReg 1 x (CPU a b c d e f) = CPU a x c d e f  
-    setReg 2 x (CPU a b c d e f) = CPU a b x d e f
-    setReg 3 x (CPU a b c d e f) = CPU a b c x e f      
-    setReg 4 x (CPU a b c d e f) = CPU a b c d x f  
-    setReg 5 x (CPU a b c d e f) = CPU a b c d e x  
-
+    foo :: IO () 
+    foo = do { cpu <- initCPU 
+             ; x   <- eval (Exp3 ADD (Reg 4) (Reg 5) (Reg 6)) cpu 
+             ; print x }
 
 --    loop :: CPU -> IO () 
 --    loop cpu = do   
