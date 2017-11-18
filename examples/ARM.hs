@@ -28,24 +28,40 @@ where
     comments :: Parser String 
     comments = semicolon >> anyString
 
-    immediate :: Parser Immed
+    immediate :: Parser Atom
     immediate = do { _ <- string "#"
                    ; d <- integer
-                   ; return $ Immed (asWord32 d)}
+                   ; return $ Num (asWord32 d)}
 
-    register :: Parser Reg 
+    register :: Parser Atom 
     register = do { _ <- char 'r' 
                   ; i <- integer 
-                  ; return $ Reg (asWord8 i) }
+                  ; return $ Reg (asWord32 i) }
 
-    data Reg = Reg W.Word32 deriving Show 
+
+    data Atom = Reg W.Word32 
+              | Num W.Word32 
+              deriving Show 
+
+    data Op = ADD 
+            | SUB 
+            | MOVE 
+            | STORE 
+            | LOAD 
+            | DEREF 
+            deriving (Show)
     
-    data Immed = Immed W.Word32 deriving Show 
+    data Num' = Num' W.Word32 deriving Show
+    data Reg' = Reg' W.Word32 deriving Show 
+    
+    type Dd  = (Reg', Num')
 
-    data Op = ADD | SUB | MOVE | STORE | LOAD | DEREF deriving (Show)
-
-    data Exp = Exp3 Op Reg Reg Reg
-             | Exp2 Op Reg Reg 
+    data Exp' = ADD0 Reg' Reg' Reg' 
+              | ADD1 Num' Num' Num'
+              deriving (Show)
+    
+    data Exp = Exp3 Op Atom Atom Atom
+             | Exp2 Op Atom Atom
              deriving (Show)    
 
 
@@ -65,6 +81,14 @@ where
     decodeOp 5 = LOAD 
     decodeOp 6 = DEREF 
 
+--    encodeAtom :: Atom -> W.Word32
+--    encodeAtom Reg m = m 
+--    encodeAtom Num m = m 
+
+    -- Remember that list is a monad
+--    encodeExp :: Exp -> [W.Word32]
+--    encodeExp (Exp3 op d m n) = [encodeOp op, encodeAtom d, encodeAtom m, encodeAtom n]
+--    encodeExp (Exp2 op d m  ) = [encodeOp op, d, m   ]    
 
     asWord16 :: (Integral a) => a -> W.Word16 
     asWord16 x = fromIntegral x
