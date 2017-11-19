@@ -10,8 +10,11 @@ where
     import Data.Bits 
     import Data.IORef 
 
-    data Instruction = Instruction { address::Int }
-
+    -----------------------------------------------------------
+    --  Some additional parsing function 
+    -----------------------------------------------------------
+    eol :: Parser String 
+    eol = (string "\n") <|> spaces
 
     comma :: Parser Char 
     comma = char ',' 
@@ -19,29 +22,39 @@ where
     semicolon :: Parser Char 
     semicolon = char ';' 
 
-    lbracket :: Parser Char 
-    lbracket = char '['
 
-    rbracket :: Parser Char 
-    rbracket = char ']'
+    lparen :: Parser Char 
+    lparen = char '(' 
+
+    rparen :: Parser Char 
+    rparen = char ')'
 
     comments :: Parser String 
     comments = semicolon >> anyString
 
-    immediate :: Parser Atom
-    immediate = do { _ <- string "#"
+    decimal :: Parser Operand
+    decimal = do { _ <- string "#"
                    ; d <- integer
-                   ; return $ Num (asWord32 d)}
+                   ; return $ Number (asWord32 d)}
 
-    register :: Parser Atom 
-    register = do { _ <- char 'r' 
+    dataRegister :: Parser Operand 
+    dataRegister = do { _ <- char 'd' 
                   ; i <- integer 
-                  ; return $ Reg (asWord32 i) }
+                  ; return $ DataReg (asWord8 i) }
 
+    addrRegister :: Parser Operand 
+    addrRegister = do { _ <- char 'a' 
+                      ; i <- integer 
+                      ; return $ AddrReg (asWord8 i) }
 
-    data Atom = Reg W.Word32 
-              | Num W.Word32 
-              deriving Show 
+    register :: Parser Operand 
+    register = addrRegister <|> dataRegister 
+
+    data Operand = AddrReg W.Word8 
+                 | DataReg W.Word8
+                 | Number  W.Word32  
+                 | Memory  {addrReg :: W.Word8, offset :: W.Word8}
+                 deriving (Show)
 
     data Op = ADD 
             | SUB 
@@ -51,20 +64,11 @@ where
             | DEREF 
             deriving (Show)
     
-    data Num' = Num' W.Word32 deriving Show
-    data Reg' = Reg' W.Word32 deriving Show 
-    
-    type Dd  = (Reg', Num')
-
-    data Exp' = ADD0 Reg' Reg' Reg' 
-              | ADD1 Num' Num' Num'
-              deriving (Show)
-    
-    data Exp = Exp3 Op Atom Atom Atom
-             | Exp2 Op Atom Atom
-             deriving (Show)    
-
-
+    data Instruction = MOVE_B Operand Operand
+                     | MOVE_W Operand Operand 
+                     | MOVE_L Operand Operand
+                     deriving (Show)
+                     
     encodeOp :: Op -> W.Word32 
     encodeOp ADD   = 1 
     encodeOp SUB   = 2 
@@ -80,6 +84,32 @@ where
     decodeOp 4 = STORE 
     decodeOp 5 = LOAD 
     decodeOp 6 = DEREF 
+
+    memory0 :: Parser Operand 
+    memory0 =  do { _ <- lparen 
+                  ; r <- addrRegister
+                  ; _ <- rparen
+                  ; let AddrReg i = r 
+                  ; return $ Memory i 0}
+
+    memory1 :: Parser Operand 
+    memory1 =  do { _ <- lparen 
+                  ; r <- addrRegister
+                  ; _ <- rparen
+                  ; _ <- char '+'
+                  ; let AddrReg i = r 
+                  ; return $ Memory i 1}
+                                    
+    moveB :: Parser Instruction 
+    moveB = do { _  <- string "move.b"
+               ; _  <- spaces 
+               ; rs <- register
+               ; _  <- spaces 
+               ; _  <- comma 
+               ; _  <- spaces
+               ; rd <- register 
+               ; return $ MOVE_B rs rd 
+               }
 
 --    encodeAtom :: Atom -> W.Word32
 --    encodeAtom Reg m = m 
@@ -102,32 +132,31 @@ where
     asInt :: (Integral a) => a -> Int 
     asInt x = fromIntegral x 
 
-    eol :: Parser String 
-    eol = (string "\n") <|> spaces
+    
 
-    add :: Parser Exp
-    add = do { _   <- string "ADD" 
-             ; _   <- spaces 
-             ; rd  <- register 
-             ; _   <- comma 
-             ; _   <- spaces 
-             ; rn  <- register 
-             ; _   <- comma 
-             ; _   <- spaces 
-             ; rm  <- register 
-             ; return $ Exp3 ADD rd rn rm } 
+--    add :: Parser Exp
+--    add = do { _   <- string "ADD" 
+--             ; _   <- spaces 
+--             ; rd  <- register 
+--             ; _   <- comma 
+--             ; _   <- spaces 
+--             ; rn  <- register 
+--             ; _   <- comma 
+--             ; _   <- spaces 
+--             ; rm  <- register 
+--             ; return $ Exp3 ADD rd rn rm } 
 
-    sub :: Parser Exp
-    sub = do { _   <- string "SUB" 
-             ; _   <- spaces 
-             ; rd  <- register 
-             ; _   <- comma 
-             ; _   <- spaces 
-             ; rn  <- register 
-             ; _   <- comma 
-             ; _   <- spaces 
-             ; rm  <- register 
-             ; return $ Exp3 SUB rd rn rm } 
+--    sub :: Parser Exp
+--    sub = do { _   <- string "SUB" 
+--             ; _   <- spaces 
+--             ; rd  <- register 
+--             ; _   <- comma 
+--             ; _   <- spaces 
+--             ; rn  <- register 
+--             ; _   <- comma 
+--             ; _   <- spaces 
+--             ; rm  <- register 
+--             ; return $ Exp3 SUB rd rn rm } 
 
 --    move :: Parser Exp
 --    move = do { _   <- string "MOV" 
@@ -177,58 +206,58 @@ where
     --dump :: Parser Exp
     --dump = (string ":dump") >>. (return $ Reg 0)
 
-    anyExpression :: Parser Exp 
-    anyExpression = do { _   <- spaces
-                       ; exp <- add <|> sub 
-                       ; _   <- eol 
-                       ; return exp }
-    
-    parse :: String -> Either String Exp 
-    parse str = case run anyExpression str of 
-                     Failure msg -> Left msg 
-                     Success e _ -> Right e  
+--    anyExpression :: Parser Exp 
+--    anyExpression = do { _   <- spaces
+--                       ; exp <- add <|> sub 
+--                       ; _   <- eol 
+--                       ; return exp }
+--    
+--    parse :: String -> Either String Exp 
+--    parse str = case run anyExpression str of 
+--                     Failure msg -> Left msg 
+--                     Success e _ -> Right e  
+--
+--    data CPU = CPU { genReg :: [IORef W.Word32]
+--                   , pc     :: IORef W.Word32
+--                   , sp     :: IORef W.Word32 
+--                   , lr     :: IORef W.Word32}
 
-    data CPU = CPU { genReg :: [IORef W.Word32]
-                   , pc     :: IORef W.Word32
-                   , sp     :: IORef W.Word32 
-                   , lr     :: IORef W.Word32}
-
-    initCPU :: IO CPU 
-    initCPU = do { r0  <- newIORef 0
-                 ; r1  <- newIORef 0
-                 ; r2  <- newIORef 0  
-                 ; r3  <- newIORef 0
-                 ; r4  <- newIORef 0 
-                 ; r5  <- newIORef 4
-                 ; r6  <- newIORef 6  
-                 ; r7  <- newIORef 0
-                 ; r8  <- newIORef 0    
-                 ; r9  <- newIORef 0
-                 ; r10 <- newIORef 0  
-                 ; r11 <- newIORef 0
-                 ; r12 <- newIORef 0        
-                 ; pc  <- newIORef 0 
-                 ; sp  <- newIORef 0 
-                 ; lr  <- newIORef 0
-                 ; return $ CPU [r0,r1,r2,r3,r4,r5,r6,r7,r8,r9,r10,r11,r12] pc sp lr} 
+--    initCPU :: IO CPU 
+--    initCPU = do { r0  <- newIORef 0
+--                 ; r1  <- newIORef 0
+--                 ; r2  <- newIORef 0  
+--                 ; r3  <- newIORef 0
+--                 ; r4  <- newIORef 0 
+--                 ; r5  <- newIORef 4
+--                 ; r6  <- newIORef 6  
+--                 ; r7  <- newIORef 0
+--                 ; r8  <- newIORef 0    
+--                 ; r9  <- newIORef 0
+--                 ; r10 <- newIORef 0  
+--                 ; r11 <- newIORef 0
+--                 ; r12 <- newIORef 0        
+--                 ; pc  <- newIORef 0 
+--                 ; sp  <- newIORef 0 
+--                 ; lr  <- newIORef 0
+--                 ; return $ CPU [r0,r1,r2,r3,r4,r5,r6,r7,r8,r9,r10,r11,r12] pc sp lr} 
                
-    eval :: Exp -> CPU -> IO W.Word32 
-    eval (Exp3 ADD (Reg d) (Reg m) (Reg n)) cpu = 
-        do { let r  = genReg cpu
-           ; let m' = (asInt m)
-           ; let n' = (asInt n)   
-           ; let d' = (asInt d)                         
-           ; rm <- readIORef (r !! m') 
-           ; rn <- readIORef (r !! n')
-           ; _  <- writeIORef (r !! d') (rm + rn)
-           ; rd <- readIORef (r !! d')
-           ; return rd 
-        }
+--    eval :: Exp -> CPU -> IO W.Word32 
+--    eval (Exp3 ADD (Reg d) (Reg m) (Reg n)) cpu = 
+ --       do { let r  = genReg cpu
+--           ; let m' = (asInt m)
+--           ; let n' = (asInt n)   
+--           ; let d' = (asInt d)                         
+--           ; rm <- readIORef (r !! m') 
+--           ; rn <- readIORef (r !! n')
+--           ; _  <- writeIORef (r !! d') (rm + rn)
+--           ; rd <- readIORef (r !! d')
+--           ; return rd 
+--        }
 
-    foo :: IO () 
-    foo = do { cpu <- initCPU 
-             ; x   <- eval (Exp3 ADD (Reg 4) (Reg 5) (Reg 6)) cpu 
-             ; print x }
+--    foo :: IO () 
+--    foo = do { cpu <- initCPU 
+--             ; x   <- eval (Exp3 ADD (Reg 4) (Reg 5) (Reg 6)) cpu 
+--             ; print x }
 
 --    loop :: CPU -> IO () 
 --    loop cpu = do   
