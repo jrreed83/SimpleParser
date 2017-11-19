@@ -37,18 +37,8 @@ where
                    ; d <- integer
                    ; return $ Number (asWord32 d)}
 
-    dataRegister :: Parser Operand 
-    dataRegister = do { _ <- char 'd' 
-                      ; i <- integer 
-                      ; return $ DataReg (asWord8 i) }
-
-    addrRegister :: Parser Operand 
-    addrRegister = do { _ <- char 'a' 
-                      ; i <- integer 
-                      ; return $ AddrReg (asWord8 i) }
-
-    register :: Parser Operand 
-    register = addrRegister <|> dataRegister 
+    u8 :: Parser W.Word8 
+    u8 = integer >>= (\x -> return $ asWord8 x)
 
     data Operand = AddrReg W.Word8 
                  | DataReg W.Word8
@@ -63,97 +53,25 @@ where
                      | AddrPostDec  W.Word8 
                      | AddrPreInc   W.Word8
                      | AddrPreDec   W.Word8 
-
-    data Op = ADD 
-            | SUB 
-            | MOVE 
-            | STORE 
-            | LOAD 
-            | DEREF 
-            deriving (Show)
-    
-    data Instruction = MOVE_B Operand Operand
-                     | MOVE_W Operand Operand 
-                     | MOVE_L Operand Operand
                      deriving (Show)
-                     
-    encodeOp :: Op -> W.Word32 
-    encodeOp ADD   = 1 
-    encodeOp SUB   = 2 
-    encodeOp MOVE  = 3
-    encodeOp STORE = 4
-    encodeOp LOAD  = 5 
-    encodeOp DEREF = 6
 
-    decodeOp :: W.Word32 -> Op 
-    decodeOp 1 = ADD 
-    decodeOp 2 = SUB 
-    decodeOp 3 = MOVE 
-    decodeOp 4 = STORE 
-    decodeOp 5 = LOAD 
-    decodeOp 6 = DEREF 
+    dataMode :: Parser AddressMode 
+    dataMode = do { _ <- char 'd' 
+                  ; i <- u8 
+                  ; return $ Data i }
 
-    memoryBasic :: Parser Operand 
-    memoryBasic =  do { _ <- lparen 
-                  ; r <- addrRegister
-                  ; _ <- rparen
-                  ; let AddrReg i = r 
-                  ; return $ Memory i 0 False}
+    directAddrMode :: Parser AddressMode 
+    directAddrMode = do { _ <- char 'a' 
+                        ; i <- u8 
+                        ; return $ AddrD i }
 
-    memoryPostInc :: Parser Operand 
-    memoryPostInc =  do { _ <- lparen 
-                  ; r <- addrRegister
-                  ; _ <- rparen
-                  ; _ <- char '+'
-                  ; let AddrReg i = r 
-                  ; return $ Memory i 1 False}
 
-    memoryPostDec :: Parser Operand 
-    memoryPostDec =  do { _ <- lparen 
-                  ; r <- addrRegister
-                  ; _ <- rparen
-                  ; _ <- char '-'
-                  ; let AddrReg i = r 
-                  ; return $ Memory i (-1) False}
+    
+    data OpMode = Byte | Word | Long deriving (Show)
 
-    memoryPreInc :: Parser Operand 
-    memoryPreInc =  do { _ <- char '+'
-                       ; _ <- lparen 
-                       ; r <- addrRegister
-                       ; _ <- rparen
-                       ; let AddrReg i = r 
-                       ; return $ Memory i 1 True}
-
-    memoryPreDec :: Parser Operand 
-    memoryPreDec =  do { _ <- char '-'
-                       ; _ <- lparen 
-                       ; r <- addrRegister
-                       ; _ <- rparen
-                       ; let AddrReg i = r 
-                       ; return $ Memory i (-1) True}
-
-    memory :: Parser Operand 
-    memory = memoryPreInc <|> memoryPreDec <|> memoryBasic <|> memoryPostDec <|> memoryPostInc
-
-    moveB :: Parser Instruction 
-    moveB = do { _   <- string "move.b"
-               ; _   <- spaces 
-               ; src <- register <|> memory
-               ; _   <- spaces 
-               ; _   <- comma 
-               ; _   <- spaces
-               ; dst <- register <|> memory 
-               ; return $ MOVE_B src dst
-               }
-
---    encodeAtom :: Atom -> W.Word32
---    encodeAtom Reg m = m 
---    encodeAtom Num m = m 
-
-    -- Remember that list is a monad
---    encodeExp :: Exp -> [W.Word32]
---    encodeExp (Exp3 op d m n) = [encodeOp op, encodeAtom d, encodeAtom m, encodeAtom n]
---    encodeExp (Exp2 op d m  ) = [encodeOp op, d, m   ]    
+    data Instruction = MOVE OpMode AddressMode AddressMode
+                     deriving (Show)
+ 
 
     asWord16 :: (Integral a) => a -> W.Word16 
     asWord16 x = fromIntegral x
