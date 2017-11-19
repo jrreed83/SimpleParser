@@ -1,4 +1,4 @@
-module ARM 
+module Motorolla86000
 
 where
 
@@ -39,8 +39,8 @@ where
 
     dataRegister :: Parser Operand 
     dataRegister = do { _ <- char 'd' 
-                  ; i <- integer 
-                  ; return $ DataReg (asWord8 i) }
+                      ; i <- integer 
+                      ; return $ DataReg (asWord8 i) }
 
     addrRegister :: Parser Operand 
     addrRegister = do { _ <- char 'a' 
@@ -53,7 +53,7 @@ where
     data Operand = AddrReg W.Word8 
                  | DataReg W.Word8
                  | Number  W.Word32  
-                 | Memory  {addrReg :: W.Word8, offset :: W.Word8}
+                 | Memory  {addrReg :: W.Word8, offset :: Int, pre :: Bool}
                  deriving (Show)
 
     data Op = ADD 
@@ -85,30 +85,57 @@ where
     decodeOp 5 = LOAD 
     decodeOp 6 = DEREF 
 
-    memory0 :: Parser Operand 
-    memory0 =  do { _ <- lparen 
+    memoryBasic :: Parser Operand 
+    memoryBasic =  do { _ <- lparen 
                   ; r <- addrRegister
                   ; _ <- rparen
                   ; let AddrReg i = r 
-                  ; return $ Memory i 0}
+                  ; return $ Memory i 0 False}
 
-    memory1 :: Parser Operand 
-    memory1 =  do { _ <- lparen 
+    memoryPostInc :: Parser Operand 
+    memoryPostInc =  do { _ <- lparen 
                   ; r <- addrRegister
                   ; _ <- rparen
                   ; _ <- char '+'
                   ; let AddrReg i = r 
-                  ; return $ Memory i 1}
-                                    
+                  ; return $ Memory i 1 False}
+
+    memoryPostDec :: Parser Operand 
+    memoryPostDec =  do { _ <- lparen 
+                  ; r <- addrRegister
+                  ; _ <- rparen
+                  ; _ <- char '-'
+                  ; let AddrReg i = r 
+                  ; return $ Memory i (-1) False}
+
+    memoryPreInc :: Parser Operand 
+    memoryPreInc =  do { _ <- char '+'
+                       ; _ <- lparen 
+                       ; r <- addrRegister
+                       ; _ <- rparen
+                       ; let AddrReg i = r 
+                       ; return $ Memory i 1 True}
+
+    memoryPreDec :: Parser Operand 
+    memoryPreDec =  do { _ <- char '-'
+                       ; _ <- lparen 
+                       ; r <- addrRegister
+                       ; _ <- rparen
+                       ; let AddrReg i = r 
+                       ; return $ Memory i (-1) True}
+
+    memory :: Parser Operand 
+    memory = memoryPreInc <|> memoryPreDec <|> memoryBasic <|> memoryPostDec <|> memoryPostInc
+
     moveB :: Parser Instruction 
-    moveB = do { _  <- string "move.b"
-               ; _  <- spaces 
-               ; rs <- register
-               ; _  <- spaces 
-               ; _  <- comma 
-               ; _  <- spaces
-               ; rd <- register 
-               ; return $ MOVE_B rs rd 
+    moveB = do { _   <- string "move.b"
+               ; _   <- spaces 
+               ; src <- register <|> memory
+               ; _   <- spaces 
+               ; _   <- comma 
+               ; _   <- spaces
+               ; dst <- register <|> memory 
+               ; return $ MOVE_B src dst
                }
 
 --    encodeAtom :: Atom -> W.Word32
