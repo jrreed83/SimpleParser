@@ -56,6 +56,14 @@ where
                  | Memory  {addrReg :: W.Word8, offset :: Int, pre :: Bool}
                  deriving (Show)
 
+    data AddressMode = Data         W.Word8
+                     | AddrD        W.Word8 
+                     | AddrI        W.Word8
+                     | AddrPostInc  W.Word8
+                     | AddrPostDec  W.Word8 
+                     | AddrPreInc   W.Word8
+                     | AddrPreDec   W.Word8 
+
     data Op = ADD 
             | SUB 
             | MOVE 
