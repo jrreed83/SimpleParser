@@ -80,6 +80,11 @@ where
                 ; _ <- rparen
                 ; return $ AddrI i }
     
+
+    isDataReg :: AddressMode -> Bool 
+    isDataReg (Data _) = True 
+    isDataReg _        = False
+
     pAddrPostInc :: Parser AddressMode 
     pAddrPostInc = (pAddrI .>> (char '+')) >>= (\(AddrI x) -> return $ AddrPostInc x)
 
@@ -156,30 +161,39 @@ where
              ; src  <- pAddressMode
              ; _    <- comma 
              ; dst  <- pAddressMode
-             ; return $ ADD op src dst}   
+             ; if isDataReg (src) || isDataReg (dst) then return (ADD op src dst) else failure "uh oh"
+             }   
 
-    encode :: Instruction -> B.ByteString
-    encode NOP               = B.pack [0] 
-    encode (MOVE op src dst) = B.pack $ [1, encOpMode op] ++ encAddMode src ++ encAddMode dst 
-    encode (ADD  op src dst) = B.pack $ [2, encOpMode op] ++ encAddMode src ++ encAddMode dst 
+    encode :: Instruction -> [W.Word8]
+    encode NOP               = [0] 
+    encode (MOVE op src dst) = [1, encOpMode op] ++ encAddMode src ++ encAddMode dst 
+    encode (ADD  op src dst) = [2, encOpMode op] ++ encAddMode src ++ encAddMode dst 
 
 
+    data CPU = CPU { ip :: IORef W.Word32 }
 
---    anyExpression :: Parser Exp 
---    anyExpression = do { _   <- spaces
---                       ; exp <- add <|> sub 
---                       ; _   <- eol 
---                       ; return exp }
---    
---    parse :: String -> Either String Exp 
---    parse str = case run anyExpression str of 
---                     Failure msg -> Left msg 
---                     Success e _ -> Right e  
---
---    data CPU = CPU { genReg :: [IORef W.Word32]
---                   , pc     :: IORef W.Word32
---                   , sp     :: IORef W.Word32 
---                   , lr     :: IORef W.Word32}
+    initCPU :: IO CPU 
+    initCPU = do { ip <- newIORef 0
+                   ; return $ CPU ip }
+    
+    process :: [W.Word8] -> CPU -> IO () 
+    process bytes cpu = do 
+                           i <- readIORef (ip cpu)
+                           let b = (bytes !! (asInt i))
+                           putStrLn $ show b
+                           if b == 0xff 
+                            then return () 
+                            else do
+                                modifyIORef (ip cpu) (+1)
+                                process bytes cpu
+
+                             
+
+
+    execute :: [W.Word8] -> IO ()
+    execute bytes = do { cpu <- initCPU 
+                         ; process bytes cpu 
+                         }
 
 --    initCPU :: IO CPU 
 --    initCPU = do { r0  <- newIORef 0
