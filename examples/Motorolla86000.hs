@@ -4,9 +4,8 @@ where
 
     import Data.SimpleParser 
     import Text.Printf 
-    import qualified Data.ByteString.Lazy as L
+    import qualified Data.ByteString as B 
     import qualified Data.Word as W
-    import qualified Data.Binary.Put as P
     import Data.Bits 
     import Data.IORef 
 
@@ -32,19 +31,14 @@ where
     comments :: Parser String 
     comments = semicolon >> anyString
 
-    decimal :: Parser Operand
-    decimal = do { _ <- string "#"
-                   ; d <- integer
-                   ; return $ Number (asWord32 d)}
-
     u8 :: Parser W.Word8 
     u8 = integer >>= (\x -> return $ asWord8 x)
 
-    data Operand = AddrReg W.Word8 
-                 | DataReg W.Word8
-                 | Number  W.Word32  
-                 | Memory  {addrReg :: W.Word8, offset :: Int, pre :: Bool}
-                 deriving (Show)
+    u16 :: Parser W.Word16 
+    u16 = integer >>= (\x -> return $ asWord16 x)
+
+    u32 :: Parser W.Word32 
+    u32 = integer >>= (\x -> return $ asWord32 x)
 
     data AddressMode = Data         W.Word8
                      | AddrD        W.Word8 
@@ -52,26 +46,82 @@ where
                      | AddrPostInc  W.Word8
                      | AddrPostDec  W.Word8 
                      | AddrPreInc   W.Word8
-                     | AddrPreDec   W.Word8 
+                     | AddrPreDec   W.Word8
+                     | Immed        W.Word32  
                      deriving (Show)
 
-    dataMode :: Parser AddressMode 
-    dataMode = do { _ <- char 'd' 
-                  ; i <- u8 
-                  ; return $ Data i }
+    encAddMode :: AddressMode -> [W.Word8] 
+    encAddMode (Data  i)       = [0, i] 
+    encAddMode (AddrD i)       = [1, i]  -- 0001,i
+    encAddMode (AddrI i)       = [2, i]  -- 0010,i 
+    encAddMode (AddrPostInc i) = [3, i]
+    encAddMode (AddrPostDec i) = [4, i]
+    encAddMode (AddrPreInc i)  = [5, i]
+    encAddMode (AddrPreDec i)  = [6, i]
+    encAddMode (Immed i)       = [7, i0, i1, i2, i3] 
+                                 where i0 = asWord8 $ (shiftR i 0 ) .&. 0xff 
+                                       i1 = asWord8 $ (shiftR i 8 ) .&. 0xff 
+                                       i2 = asWord8 $ (shiftR i 16) .&. 0xff 
+                                       i3 = asWord8 $ (shiftR i 24) .&. 0xff                                        
+    pData :: Parser AddressMode 
+    pData = do { _ <- char 'd' 
+               ; i <- u8 
+               ; return $ Data i }
 
-    directAddrMode :: Parser AddressMode 
-    directAddrMode = do { _ <- char 'a' 
-                        ; i <- u8 
-                        ; return $ AddrD i }
+    pAddrD :: Parser AddressMode 
+    pAddrD = do { _ <- char 'a' 
+                ; i <- u8 
+                ; return $ AddrD i }
 
+    pAddrI :: Parser AddressMode
+    pAddrI = do { _ <- lparen 
+                ; _ <- char 'a' 
+                ; i <- u8;
+                ; _ <- rparen
+                ; return $ AddrI i }
+    
+    pAddrPostInc :: Parser AddressMode 
+    pAddrPostInc = (pAddrI .>> (char '+')) >>= (\(AddrI x) -> return $ AddrPostInc x)
 
+    pAddrPostDec :: Parser AddressMode 
+    pAddrPostDec = (pAddrI .>> (char '-')) >>= (\(AddrI x) -> return $ AddrPostDec x)
+
+    pAddrPreInc :: Parser AddressMode 
+    pAddrPreInc = ((char '+') >>. pAddrI) >>= (\(AddrI x) -> return $ AddrPreInc x)
+
+    pAddrPreDec :: Parser AddressMode 
+    pAddrPreDec = ((char '-') >>. pAddrI) >>= (\(AddrI x) -> return $ AddrPreDec x)
+
+    pImmed :: Parser AddressMode 
+    pImmed = do { _ <- char '#' 
+                ; i <- u32 
+                ; return $ Immed i}
+
+    pAddressMode = pAddrPreDec <|> pAddrPreInc <|> pAddrPostInc <|> pAddrPostDec <|> pAddrI <|> pAddrD <|> pData <|> pImmed
     
     data OpMode = Byte | Word | Long deriving (Show)
 
+    encOpMode :: OpMode -> W.Word8 
+    encOpMode Byte = 0 
+    encOpMode Word = 1 
+    encOpMode Long = 2 
+
     data Instruction = MOVE OpMode AddressMode AddressMode
+                     | ADD  OpMode AddressMode AddressMode
+                     | NOP
                      deriving (Show)
  
+    pByte :: Parser OpMode 
+    pByte = (string ".b") >>= (\_ -> return Byte) 
+
+    pWord :: Parser OpMode 
+    pWord = (string ".w") >>= (\_ -> return Word) 
+    
+    pLong :: Parser OpMode 
+    pLong = (string ".l") >>= (\_ -> return Long) 
+
+    pOpMode :: Parser OpMode 
+    pOpMode = pByte <|> pLong <|> pWord 
 
     asWord16 :: (Integral a) => a -> W.Word16 
     asWord16 x = fromIntegral x
@@ -85,79 +135,35 @@ where
     asInt :: (Integral a) => a -> Int 
     asInt x = fromIntegral x 
 
-    
+    -- Instruction set
 
---    add :: Parser Exp
---    add = do { _   <- string "ADD" 
---             ; _   <- spaces 
---             ; rd  <- register 
---             ; _   <- comma 
---             ; _   <- spaces 
---             ; rn  <- register 
---             ; _   <- comma 
---             ; _   <- spaces 
---             ; rm  <- register 
---             ; return $ Exp3 ADD rd rn rm } 
+    nop :: Parser Instruction 
+    nop = (string "nop") >>= (\_ -> return NOP)
 
---    sub :: Parser Exp
---    sub = do { _   <- string "SUB" 
---             ; _   <- spaces 
---             ; rd  <- register 
---             ; _   <- comma 
---             ; _   <- spaces 
---             ; rn  <- register 
---             ; _   <- comma 
---             ; _   <- spaces 
---             ; rm  <- register 
---             ; return $ Exp3 SUB rd rn rm } 
+    move :: Parser Instruction
+    move = do { _    <- string "move"
+              ; op   <- pOpMode    
+              ; _    <- spaces
+              ; src  <- pAddressMode
+              ; _    <- comma 
+              ; dst  <- pAddressMode
+              ; return $ MOVE op src dst}    
 
---    move :: Parser Exp
---    move = do { _   <- string "MOV" 
---              ; _   <- spaces 
---              ; rd  <- register 
---              ; _   <- comma 
---              ; _   <- spaces 
---              ; rn  <- register <|> immediate 
---              ; return $ Exp2 MOVE rd rn }            
-    
---    derefOffset :: Parser Exp 
---    derefOffset = do { _      <- lbracket
---                     ; rn     <- register
---                     ; _      <- comma 
---                     ; _      <- spaces
---                     ; offset <- immediate 
---                     ; _      <- rbracket
---                     ; return $ Exp2 DEREF rn offset } 
+    add :: Parser Instruction
+    add = do { _    <- string "add"
+             ; op   <- pOpMode    
+             ; _    <- spaces
+             ; src  <- pAddressMode
+             ; _    <- comma 
+             ; dst  <- pAddressMode
+             ; return $ ADD op src dst}   
 
---    derefNoOffset :: Parser Exp 
---    derefNoOffset = do { _      <- lbracket
---                       ; rn     <- register  
---                       ; _      <- rbracket
---                       ; return $ Exp2 DEREF rn (Num 0) } 
+    encode :: Instruction -> B.ByteString
+    encode NOP               = B.pack [0] 
+    encode (MOVE op src dst) = B.pack $ [1, encOpMode op] ++ encAddMode src ++ encAddMode dst 
+    encode (ADD  op src dst) = B.pack $ [2, encOpMode op] ++ encAddMode src ++ encAddMode dst 
 
---    deref :: Parser Exp 
---    deref = derefOffset <|> derefNoOffset  
-    
---    load :: Parser Exp
---    load = do { _  <- string "LDR"
---              ; _  <- spaces
---              ; rd <- register
---              ; _  <- comma 
---              ; _  <- spaces 
---              ; d  <- deref 
---              ; return $ Exp2 LOAD rd d }
 
---    store :: Parser Exp
---    store = do { _  <- string "STR"
---             ; _  <- spaces
---             ; rn <- (label "expect register" register)
---             ; _  <- comma 
---             ; _  <- spaces 
---             ; d  <- deref 
---             ; return $ Exp2 STORE rn d }
-
-    --dump :: Parser Exp
-    --dump = (string ":dump") >>. (return $ Reg 0)
 
 --    anyExpression :: Parser Exp 
 --    anyExpression = do { _   <- spaces
