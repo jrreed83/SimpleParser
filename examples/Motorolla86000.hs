@@ -3,12 +3,11 @@ module Motorolla86000
 where
 
     import Data.SimpleParser 
-    import Text.Printf 
     import qualified Data.ByteString as B 
     import qualified Data.Word as W
     import Data.Bits 
     import Data.IORef 
-
+    import qualified Data.Vector as V 
     -----------------------------------------------------------
     --  Some additional parsing function 
     -----------------------------------------------------------
@@ -169,32 +168,46 @@ where
     encode (MOVE op src dst) = [1, encOpMode op] ++ encAddMode src ++ encAddMode dst 
     encode (ADD  op src dst) = [2, encOpMode op] ++ encAddMode src ++ encAddMode dst 
 
+    type Memory = V.Vector W.Word8 
+    
+    initMemory :: W.Word32 -> Memory 
+    initMemory n = V.fromList [1,1,2,255]--V.replicate (asInt n) (0::W.Word8)
 
-    data CPU = CPU { ip :: IORef W.Word32 }
+    memoryLookup :: (Integral a) => a -> Memory -> W.Word8 
+    memoryLookup i mem = mem V.! (asInt i)
+
+    data CPU = CPU { ip     :: IORef W.Word32
+                   , sp     :: IORef W.Word32 
+                   , memory :: Memory}
 
     initCPU :: IO CPU 
-    initCPU = do { ip <- newIORef 0
-                   ; return $ CPU ip }
+    initCPU =  do { ip <- newIORef 0;
+                  ; sp <- newIORef 0;
+                  ; return $ CPU ip sp (initMemory 256)}
+
+    nextInst :: CPU -> IO W.Word8
+    nextInst cpu = let ip'  = ip cpu
+                       mem' = memory cpu
+                   in  do { i <- readIORef ip' 
+                          ; modifyIORef ip' (+ 1)
+                          ; return $ memoryLookup i mem'}
+
+    execute :: IO () 
+    execute = 
+        do  
+           cpu <- initCPU 
+           execute' cpu
+
+    execute' :: CPU -> IO ()
+    execute cpu = 
+        do  
+           x <- nextInst cpu 
+           case x of 
+                255 -> do { putStrLn "Done"
+                          ; return ()}
+                _   -> do { putStrLn (show x)
+                          ; execute cpu}     
     
-    process :: [W.Word8] -> CPU -> IO () 
-    process bytes cpu = do 
-                           i <- readIORef (ip cpu)
-                           let b = (bytes !! (asInt i))
-                           putStrLn $ show b
-                           if b == 0xff 
-                            then return () 
-                            else do
-                                modifyIORef (ip cpu) (+1)
-                                process bytes cpu
-
-                             
-
-
-    execute :: [W.Word8] -> IO ()
-    execute bytes = do { cpu <- initCPU 
-                         ; process bytes cpu 
-                         }
-
 --    initCPU :: IO CPU 
 --    initCPU = do { r0  <- newIORef 0
 --                 ; r1  <- newIORef 0
