@@ -113,6 +113,7 @@ where
     data Instruction = MOVE OpMode AddressMode AddressMode
                      | ADD  OpMode AddressMode AddressMode
                      | NOP
+                     | STOP
                      deriving (Show)
  
     pByte :: Parser OpMode 
@@ -141,11 +142,11 @@ where
 
     -- Instruction set
 
-    nop :: Parser Instruction 
-    nop = (string "nop") >>= (\_ -> return NOP)
+    pNop :: Parser Instruction 
+    pNop = (string "nop") >>= (\_ -> return NOP)
 
-    move :: Parser Instruction
-    move = do { _    <- string "move"
+    pMove :: Parser Instruction
+    pMove = do { _    <- string "move"
               ; op   <- pOpMode    
               ; _    <- spaces
               ; src  <- pAddressMode
@@ -153,8 +154,8 @@ where
               ; dst  <- pAddressMode
               ; return $ MOVE op src dst}    
 
-    add :: Parser Instruction
-    add = do { _    <- string "add"
+    pAdd :: Parser Instruction
+    pAdd = do { _    <- string "add"
              ; op   <- pOpMode    
              ; _    <- spaces
              ; src  <- pAddressMode
@@ -181,9 +182,15 @@ where
                    , memory :: Memory}
 
     initCPU :: IO CPU 
-    initCPU =  do { ip <- newIORef 0;
-                  ; sp <- newIORef 0;
-                  ; return $ CPU ip sp (initMemory 256)}
+    initCPU =  (newIORef 0) >>= (\ip -> 
+               (newIORef 0) >>= (\sp -> 
+               (return $ CPU ip sp (initMemory 256))))
+
+    nop :: CPU -> IO () 
+    nop cpu = return ()
+
+    stop :: CPU -> IO ()
+    stop cpu = return ()
 
     nextInst :: CPU -> IO W.Word8
     nextInst cpu = let ip'  = ip cpu
@@ -193,52 +200,22 @@ where
                           ; return $ memoryLookup i mem'}
 
     execute :: IO () 
-    execute = 
-        do  
-           cpu <- initCPU 
-           execute' cpu
+    execute = initCPU >>= ( \cpu -> execute' cpu)
 
     execute' :: CPU -> IO ()
-    execute cpu = 
+    execute' cpu = 
         do  
            x <- nextInst cpu 
            case x of 
-                255 -> do { putStrLn "Done"
+                255 -> do { stop cpu 
+                          ; putStrLn "STOP"
                           ; return ()}
-                _   -> do { putStrLn (show x)
-                          ; execute cpu}     
+                _   -> do { nop cpu
+                          ; putStrLn "NOP"
+                          ; execute' cpu}     
     
---    initCPU :: IO CPU 
---    initCPU = do { r0  <- newIORef 0
---                 ; r1  <- newIORef 0
---                 ; r2  <- newIORef 0  
---                 ; r3  <- newIORef 0
---                 ; r4  <- newIORef 0 
---                 ; r5  <- newIORef 4
---                 ; r6  <- newIORef 6  
---                 ; r7  <- newIORef 0
---                 ; r8  <- newIORef 0    
---                 ; r9  <- newIORef 0
---                 ; r10 <- newIORef 0  
---                 ; r11 <- newIORef 0
---                 ; r12 <- newIORef 0        
---                 ; pc  <- newIORef 0 
---                 ; sp  <- newIORef 0 
---                 ; lr  <- newIORef 0
---                 ; return $ CPU [r0,r1,r2,r3,r4,r5,r6,r7,r8,r9,r10,r11,r12] pc sp lr} 
+
                
---    eval :: Exp -> CPU -> IO W.Word32 
---    eval (Exp3 ADD (Reg d) (Reg m) (Reg n)) cpu = 
- --       do { let r  = genReg cpu
---           ; let m' = (asInt m)
---           ; let n' = (asInt n)   
---           ; let d' = (asInt d)                         
---           ; rm <- readIORef (r !! m') 
---           ; rn <- readIORef (r !! n')
---           ; _  <- writeIORef (r !! d') (rm + rn)
---           ; rd <- readIORef (r !! d')
---           ; return rd 
---        }
 
 --    foo :: IO () 
 --    foo = do { cpu <- initCPU 
