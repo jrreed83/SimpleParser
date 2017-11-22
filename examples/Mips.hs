@@ -8,6 +8,26 @@ where
     import Data.Bits 
     import Data.IORef 
     import qualified Data.Vector as V 
+
+    (.<<.) :: (Bits a) => a -> Int -> a 
+    (.<<.) x i = shiftL x i 
+
+    (.>>.) :: (Bits a) => a -> Int -> a 
+    (.>>.) x i = shiftR x i     
+    ----------------------------------------------------------
+
+    asWord16 :: (Integral a) => a -> W.Word16 
+    asWord16 x = fromIntegral x
+
+    asWord8 :: (Integral a) => a -> W.Word8 
+    asWord8 x = fromIntegral x
+
+    asWord32 :: (Integral a) => a -> W.Word32 
+    asWord32 x = fromIntegral x
+
+    asInt :: (Integral a) => a -> Int 
+    asInt x = fromIntegral x 
+
     -----------------------------------------------------------
     --  Some additional parsing function 
     -----------------------------------------------------------
@@ -105,14 +125,45 @@ where
     t7 :: Parser Reg 
     t7 = (string "$t7") >>= (\_ -> return T7)      
 
+    s0 :: Parser Reg 
+    s0 = (string "$s0") >>= (\_ -> return S0)
+
+    s1 :: Parser Reg 
+    s1 = (string "$s1") >>= (\_ -> return S1)
+
+    s2 :: Parser Reg 
+    s2 = (string "$s2") >>= (\_ -> return S2)
+
+    s3 :: Parser Reg 
+    s3 = (string "$s3") >>= (\_ -> return S3)   
+    
+    s4 :: Parser Reg 
+    s4 = (string "$s4") >>= (\_ -> return S4)
+
+    s5 :: Parser Reg 
+    s5 = (string "$s5") >>= (\_ -> return S5)
+
+    s6 :: Parser Reg 
+    s6 = (string "$s6") >>= (\_ -> return S6)
+
+    s7 :: Parser Reg 
+    s7 = (string "$s7") >>= (\_ -> return S7)  
+
+    t8 :: Parser Reg 
+    t8 = (string "$t8") >>= (\_ -> return T8)
+
+    t9 :: Parser Reg 
+    t9 = (string "$t9") >>= (\_ -> return T9)
+
     register :: Parser Reg
     register = 
         zero <|>
         at <|>
         v0 <|> v1 <|>
         a0 <|> a1 <|> a2 <|> a3 <|>
-        t0 <|> t1 <|> t2 <|> t3 <|> t4 <|> t5 <|> t6 <|> t7
-
+        t0 <|> t1 <|> t2 <|> t3 <|> t4 <|> t5 <|> t6 <|> t7 <|>
+        s0 <|> s1 <|> s2 <|> s3 <|> s4 <|> s5 <|> s6 <|> s7 <|>
+        t8 <|> t9
     --------------------------------------------------------------------------------
 
     data Rop = ADD | SUB | AND | OR | XOR
@@ -124,9 +175,13 @@ where
     data Immed = Immed W.Word32 
                deriving (Show, Eq)
 
+    data Shft = Shft W.Word8 
+               deriving (Show, Eq)
+
     -- Instruction Set 
-    data Instruction = RType Rop Reg Reg Reg
-                     | IType Iop Reg Reg Immed 
+    data Instruction = RType Rop Reg Reg Reg W.Word8
+                     | IType Iop Reg Reg     W.Word32
+                     | NOP 
                      deriving (Show, Eq)
 
     add :: Parser Instruction 
@@ -138,38 +193,53 @@ where
         rt <- register 
         _  <- comma 
         rs <- register 
-        return $ RType ADD rd rt rs 
+        return $ RType ADD rd rt rs 0
 
-    -- encAddMode :: AddressMode -> [W.Word8] 
-    -- encAddMode (Data  i)       = [0, i] 
-    -- encAddMode (AddrD i)       = [1, i]  -- 0001,i
-    -- encAddMode (AddrI i)       = [2, i]  -- 0010,i 
-    -- encAddMode (AddrPostInc i) = [3, i]
-    -- encAddMode (AddrPostDec i) = [4, i]
-    -- encAddMode (AddrPreInc i)  = [5, i]
-    -- encAddMode (AddrPreDec i)  = [6, i]
-    -- encAddMode (Immed i)       = [7, i0, i1, i2, i3] 
-    --                              where i0 = asWord8 $ (shiftR i 0 ) .&. 0xff 
-    --                                    i1 = asWord8 $ (shiftR i 8 ) .&. 0xff 
-    --                                    i2 = asWord8 $ (shiftR i 16) .&. 0xff 
-    --                                    i3 = asWord8 $ (shiftR i 24) .&. 0xff                                        
-    -- pData :: Parser AddressMode 
-    -- pData = do { _ <- char 'd' 
-    --            ; i <- u8 
-    --            ; return $ Data i }
+                                    
+    ----------------------------------------------------------------------------------
 
-    -- pAddrD :: Parser AddressMode 
-    -- pAddrD = do { _ <- char 'a' 
-    --             ; i <- u8 
-    --             ; return $ AddrD i }
-
-
-
-    -- pImmed :: Parser AddressMode 
-    -- pImmed = do { _ <- char '#' 
-    --             ; i <- u32 
-    --             ; return $ Immed i}
-
+    regCode :: Reg -> W.Word8
+    regCode ZERO = 0
+    regCode AT   = 1 
+    regCode V0   = 2
+    regCode V1   = 3 
+    regCode A0   = 4
+    regCode A1   = 5 
+    regCode A3   = 6
+    regCode T0   = 7 
+    regCode T1   = 8 
+    regCode T2   = 9 
+    regCode T3   = 10 
+    regCode T4   = 11 
+    regCode T5   = 12 
+    regCode T6   = 13 
+    regCode T7   = 14
+    regCode S0   = 15 
+    regCode S1   = 16 
+    regCode S2   = 17 
+    regCode S3   = 18 
+    regCode S4   = 19 
+    regCode S5   = 20 
+    regCode S6   = 21 
+    regCode S7   = 22    
+    
+    funCode :: Rop -> W.Word8 
+    funCode _ = 0
+    encode :: Instruction -> W.Word32 
+    encode NOP                        = 0
+    encode (RType rop rd rs rt shft)  = 
+        (f .<<. 0  ) .|. 
+        (i .<<. 6  ) .|.
+        (t .<<. 11 ) .|. 
+        (s .<<. 16 ) .|.
+        (d .<<. 21 ) .|.
+        (o .<<. 26 )
+        where f = asWord32 $ funCode rop 
+              d = asWord32 $ regCode rd 
+              s = asWord32 $ regCode rs  
+              t = asWord32 $ regCode rt
+              i = asWord32 $ shft 
+              o = 0
     -- pAddressMode = pAddrPreDec <|> pAddrPreInc <|> pAddrPostInc <|> pAddrPostDec <|> pAddrI <|> pAddrD <|> pData <|> pImmed
     
     -- data OpMode = Byte | Word | Long deriving (Show)
@@ -187,17 +257,7 @@ where
  
 
 
-    asWord16 :: (Integral a) => a -> W.Word16 
-    asWord16 x = fromIntegral x
 
-    asWord8 :: (Integral a) => a -> W.Word8 
-    asWord8 x = fromIntegral x
-
-    asWord32 :: (Integral a) => a -> W.Word32 
-    asWord32 x = fromIntegral x
-
-    asInt :: (Integral a) => a -> Int 
-    asInt x = fromIntegral x 
 
 
 
@@ -234,9 +294,16 @@ where
     -- execute :: IO () 
     -- execute = initCPU >>= ( \cpu -> execute' cpu)
 
+--    step :: CPU -> IO ()
+--    step cpu = do
+--        inst <- nextInst cpu
+--        let fn = lookup inst
+--        a <- fn cpu
+
     -- execute' :: CPU -> IO ()
     -- execute' cpu = do  
     --     x <- nextInst cpu 
+    --     
     --     case x of 
     --         255 -> (stop cpu) >>= (\_ -> (putStrLn "STOP") >>= (\_ -> return ()))
     --         _   -> do 
