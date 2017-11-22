@@ -225,6 +225,7 @@ where
     
     funCode :: Rop -> W.Word8 
     funCode _ = 0
+    
     encode :: Instruction -> W.Word32 
     encode NOP                        = 0
     encode (RType rop rd rs rt shft)  = 
