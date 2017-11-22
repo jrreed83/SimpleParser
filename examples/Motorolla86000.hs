@@ -39,6 +39,46 @@ where
     u32 :: Parser W.Word32 
     u32 = integer >>= (\x -> return $ asWord32 x)
 
+
+    data Register = ZERO 
+                  | AT 
+                  | V0 | V1 
+                  | A0 | A1 | A2 | A3 
+                  | T0 | T1 | T2 | T3 | T4 | T5 | T6 | T7
+                  | S0 | S1 | S2 | S3 | S4 | S5 | S6 | S7 
+                  | T8 | T9 
+                  | K0 | K1 
+                  | GP 
+                  | SP
+                  | FP 
+                  | RP 
+                  deriving (Show, Eq)
+
+    zero :: Parser Register 
+    zero = (string "$zero") >>= (\_ -> return ZERO)
+
+    at :: Parser Register
+    at = (string "$at") >>= (\_ -> return AT)
+
+    v0 :: Parser Register 
+    v0 = (string "$v0") >>= (\_ -> return V0)
+
+    v1 :: Parser Register 
+    v1 = (string "$v1") >>= (\_ -> return V1)
+
+    a0 :: Parser Register 
+    a0 = (string "$a0") >>= (\_ -> return A0)
+
+    a1 :: Parser Register 
+    a1 = (string "$a1") >>= (\_ -> return A1)
+
+    a2 :: Parser Register 
+    a2 = (string "$a2") >>= (\_ -> return A2)
+
+    a3 :: Parser Register 
+    a3 = (string "$a3") >>= (\_ -> return A3)
+
+    
     data AddressMode = Data         W.Word8
                      | AddrD        W.Word8 
                      | AddrI        W.Word8
@@ -166,6 +206,7 @@ where
 
     encode :: Instruction -> [W.Word8]
     encode NOP               = [0] 
+    encode STOP              = [255]
     encode (MOVE op src dst) = [1, encOpMode op] ++ encAddMode src ++ encAddMode dst 
     encode (ADD  op src dst) = [2, encOpMode op] ++ encAddMode src ++ encAddMode dst 
 
@@ -203,16 +244,14 @@ where
     execute = initCPU >>= ( \cpu -> execute' cpu)
 
     execute' :: CPU -> IO ()
-    execute' cpu = 
-        do  
-           x <- nextInst cpu 
-           case x of 
-                255 -> do { stop cpu 
-                          ; putStrLn "STOP"
-                          ; return ()}
-                _   -> do { nop cpu
-                          ; putStrLn "NOP"
-                          ; execute' cpu}     
+    execute' cpu = do  
+        x <- nextInst cpu 
+        case x of 
+            255 -> (stop cpu) >>= (\_ -> (putStrLn "STOP") >>= (\_ -> return ()))
+            _   -> do 
+                nop cpu
+                putStrLn "NOP"
+                execute' cpu     
     
 
                
